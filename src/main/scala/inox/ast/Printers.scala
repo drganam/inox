@@ -186,38 +186,51 @@ trait Printer {
       case And(List(Variable(a, _, _), Variable(b, _, _))) =>
         //todo check
         val tl = Fun(i, xy)
-        val tr = ExprT(AndT(VarT(a), VarT(b)))
+        val tr = Fun(i+1, xy ++ Seq(AndT(VarT(a), VarT(b))))
         val R1 = R ++ Seq(Rule(tl, tr, None))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
         //println(R1)
-        (S, R1, i+1)
+        (S1, R1, i+1)
       case Or(List(Variable(a, _, _), Variable(b, _, _))) =>
         //todo check
         val tl = Fun(i, xy)
-        val tr = ExprT(OrT(VarT(a), VarT(b)))
+        val tr = Fun(i+1, xy ++ Seq(OrT(VarT(a), VarT(b))))
         val R1 = R ++ Seq(Rule(tl, tr, None))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
         //println(R1)
-        (S, R1, i+1)
+        (S1, R1, i+1)
       case Variable(id, _, _) =>
         //todo finish
         val tl = Fun(i, xy)
-        val tr = ExprT(VarT(id))
+        val tr = Fun(i+1, xy ++ Seq(VarT(id)))
         val R1 = R ++ Seq(Rule(tl, tr, None))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
         //println(R1)
-        (S, R1, i+1)
+        (S1, R1, i+1)
       case BooleanLiteral(true) =>
         // todo finish
         val tl = Fun(i, xy)
-        val tr = ExprT(TrueT())
+        val tr = Fun(i+1, xy ++ Seq(TrueT()))
         val R1 = R ++ Seq(Rule(tl, tr, None))
-        //println(R1)
-        (S, R1, i+1)
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
+        println(R1)
+        (S1, R1, i+1)
       case BooleanLiteral(false) =>
         // todo finish
         val tl = Fun(i, xy)
-        val tr = ExprT(FalseT())
+        val tr = Fun(i+1, xy ++ Seq(FalseT()))
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
+        println(R1)
+        (S1, R1, i+1)
+      case Not(Variable(id, _, _)) =>
+        // todo finish
+        val tl = Fun(i, xy)
+        val tr = Fun(i+1, xy ++ Seq(NotT(VarT(id))))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
         val R1 = R ++ Seq(Rule(tl, tr, None))
         //println(R1)
-        (S, R1, i+1)
+        (S1, R1, i+1)
       case Let(b, d, e) =>
         println("Let")
         val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
@@ -236,10 +249,13 @@ trait Printer {
             Fun(i+1, xy ++ Seq(NotT(VarT(id))))
           case _ => Fun(i+1, xy) // x ++ y ++ Seq(d)
         }
-        val R1 = R ++ Seq(Rule(tl, tr, None))
+        val more = convert(f, i, x, y, S, R, d)
+        //val R1 = R ++ Seq(Rule(tl, tr, None))
         //println(R1)
         //println(S1)
-        convert(f, i+1, x, y ++ Seq(b.id), S1, R1, e)
+        val R1 = R ++ more._2
+        val j = more._3
+        convert(f, j, x, y ++ Seq(b.id), S1, R1, e)
       case IfExpr(e, ss, tt) =>
         println("If")
         val j = i
@@ -282,8 +298,8 @@ trait Printer {
                              FunDecl(k, FunType(f.params.map(_.tpe), f.returnType)))
 
         val Rp = R ++ R2p ++ R3 ++
-        Seq(Rule(Fun(j, xy) , Fun(j+1, xy), Some(condition))) ++ // add constriant [e]
-        Seq(Rule(Fun(j, xy) , Fun(k, xy), Some(NotF(condition)))) // add constriant [e]
+        Seq(Rule(Fun(j, xy) , Fun(j+1, xy), Some(condition))) ++
+        Seq(Rule(Fun(j, xy) , Fun(k, xy), Some(NotF(condition))))
 
         //println(Sp)
         //println(Rp)
@@ -586,7 +602,9 @@ trait Printer {
       val res = convert(fd, 0, Seq() ++ Seq(fd.id), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
       val s = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
         "SIGNATURE " + "f0," + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.mkString("\n") +
-        "QUERY termination"
+        "\nQUERY termination"
+
+      println(s)
 
       val fw = new java.io.FileWriter("example.ctrs");
       fw.write(s)
