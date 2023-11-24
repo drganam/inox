@@ -121,28 +121,212 @@ trait Printer {
     }
   }
 
-  protected def ppBody(tree: Tree)(using ctx: PrinterContext): Unit = tree match {
+  class BaseSort()
+  case class FunType(args: Seq[Type], ret: Type)
+
+  class Signature()
+  //case class VarDecl() extends Signature
+  case class FunDecl(id: Int, t: FunType) extends Signature:
+    override def toString(): String = "f" + id
+
+  case class Rule(tl: Term, tr: Term, c: Option[Formula]):
+    override def toString(): String =
+      val cString = c match
+        case None => ""
+        case Some(f) => " [" + f + "] "
+      tl.toString + " -> " + tr.toString + cString + ";"
+
+
+  class Formula()
+  case class FalseF() extends Formula:
+    override def toString(): String = "false"
+
+  case class TrueF() extends Formula:
+    override def toString(): String = "true"
+
+  case class VarF(id: Identifier) extends Formula:
+    override def toString(): String = id.toString
+
+  case class NotF(b: Formula) extends Formula:
+    override def toString(): String = "not(" + b.toString + ")"
+
+
+  class Term()
+
+  class ArithExpr
+  case class IntValueT(i: Int) extends ArithExpr
+  case class VarT(id: Identifier) extends ArithExpr:
+    override def toString(): String = id.toString
+
+  case class AddT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class AndT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " /\\ " + b.toString
+  case class OrT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " \\/ " + b.toString
+  case class NotT(a: ArithExpr) extends ArithExpr:
+    override def toString(): String = "not(" + a.toString + ")"
+
+  case class FalseT() extends ArithExpr:
+    override def toString(): String = "false"
+
+  case class TrueT() extends ArithExpr:
+    override def toString(): String = "true"
+
+  class Expression() extends Term
+  case class Fun(id: Int, arith_expr: Seq[ArithExpr]) extends Expression:
+    override def toString(): String = "f" + id + "(" + arith_expr.mkString(", ") + ")"
+
+  case class ExprT(arith_expr: ArithExpr) extends Expression:
+    override def toString(): String = arith_expr.toString
+
+
+  protected def convert(f: FunDef, i: Int, x: Seq[Identifier], y: Seq[Identifier], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
+    val xy = x.map(VarT(_))++y.map(VarT(_))
+    Ss match {
+      case And(List(Variable(a, _, _), Variable(b, _, _))) =>
+        //todo check
+        val tl = Fun(i, xy)
+        val tr = ExprT(AndT(VarT(a), VarT(b)))
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        (S, R1, i+1)
+      case Or(List(Variable(a, _, _), Variable(b, _, _))) =>
+        //todo check
+        val tl = Fun(i, xy)
+        val tr = ExprT(OrT(VarT(a), VarT(b)))
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        (S, R1, i+1)
+      case Variable(id, _, _) =>
+        //todo finish
+        val tl = Fun(i, xy)
+        val tr = ExprT(VarT(id))
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        (S, R1, i+1)
+      case BooleanLiteral(true) =>
+        // todo finish
+        val tl = Fun(i, xy)
+        val tr = ExprT(TrueT())
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        (S, R1, i+1)
+      case BooleanLiteral(false) =>
+        // todo finish
+        val tl = Fun(i, xy)
+        val tr = ExprT(FalseT())
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        (S, R1, i+1)
+      case Let(b, d, e) =>
+        println("Let")
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType)))
+        //x.map((ctx.opts.symbols.get.sorts ++ ctx.opts.symbols.get.functions)(_))
+        val tl = Fun(i, xy)
+        val tr =  d match {
+          case Variable(id, _, _) => Fun(i+1, xy ++ Seq(VarT(id)))
+          case BooleanLiteral(false) =>
+            Fun(i+1, xy ++ Seq(FalseT()))
+          case BooleanLiteral(true) =>
+            Fun(i+1, xy ++ Seq(TrueT()))
+          case And(List(Variable(a, _, _), Variable(b, _, _))) =>
+            Fun(i+1, xy ++ Seq(AndT(VarT(a), VarT(b))))
+          case Not(Variable(id, _, _)) =>
+            println("not")
+            Fun(i+1, xy ++ Seq(NotT(VarT(id))))
+          case _ => Fun(i+1, xy) // x ++ y ++ Seq(d)
+        }
+        val R1 = R ++ Seq(Rule(tl, tr, None))
+        //println(R1)
+        //println(S1)
+        convert(f, i+1, x, y ++ Seq(b.id), S1, R1, e)
+      case IfExpr(e, ss, tt) =>
+        println("If")
+        val j = i
+        val res2 = convert(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
+        val S2 = res2._1
+        val R2 = res2._2
+        val k =  res2._3
+        val res3 = convert(f, k, x++y, Seq(), Seq(), Seq(), tt)
+        val S3 = res3._1
+        val R3 = res3._2
+        val n =  res3._3
+
+        val S2p = S2.filterNot(elem => elem match { case FunDecl(id, t) => id == k })
+        val R2p = R2.map(elem => elem match {
+          case Rule(tl, tr, c) =>
+            tl match {
+              case Fun(id, arith_expr) if id == k =>
+                Rule(Fun(n, arith_expr), tr, c)
+              case _ => elem
+            }
+            tr match {
+              case Fun(id, arith_expr) if id == k =>
+                Rule(tl, Fun(n, arith_expr), c)
+              case _ => elem
+            }
+          case _ => elem
+        })
+
+        //convert(f, n, x, y, Σ′, R′, Ss)
+
+        // todo: this is code duplication? run convert for e even if there are no side effects ?
+        val condition = e match {
+          case BooleanLiteral(true) => TrueF()
+          case BooleanLiteral(false) => FalseF()
+          case Variable(id, _, _) => VarF(id) // todo
+          case _ =>  FalseF() // todo
+        }
+
+        val Sp = S ++ S2p ++ S3 ++ Seq(FunDecl(j+1, FunType(f.params.map(_.tpe), f.returnType)),
+                             FunDecl(k, FunType(f.params.map(_.tpe), f.returnType)))
+
+        val Rp = R ++ R2p ++ R3 ++
+        Seq(Rule(Fun(j, xy) , Fun(j+1, xy), Some(condition))) ++ // add constriant [e]
+        Seq(Rule(Fun(j, xy) , Fun(k, xy), Some(NotF(condition)))) // add constriant [e]
+
+        //println(Sp)
+        //println(Rp)
+        (Sp, Rp, n)
+      case _ =>
+        println("not let")
+        //println(Ss)
+        (S, R, i+1)
+    }
+
+  }
+
+  protected def ppBody(tree: Tree)(using ctx: PrinterContext): Unit = {
+  //println("ppBody")
+  tree match {
     case Variable(id, _, _) =>
+      println("1")
       p"$id"
 
     case Let(vd, expr, SubString(v2: Variable, start, StringLength(v3: Variable))) if vd.toVariable == v2 && v2 == v3 =>
+      println("2")
       p"$expr.substring($start)"
 
     case Let(b, d, e) =>
+      println("3")
       p"""|val $b = $d
           |$e"""
 
     case Forall(args, e) =>
+      println("4")
       ppForall(args, e)
 
     case Choose(res, pred) =>
+      println("5")
       p"choose(($res) => $pred)"
 
     case Assume(pred, body) =>
+      println("6")
       p"""|assume($pred)
           |$body"""
 
     case e @ ADT(id, tps, args) =>
+      println("7")
       p"$id${nary(tps, ", ", "[", "]")}($args)"
 
     case And(exprs) => optP {
@@ -194,12 +378,14 @@ trait Printer {
     case ADTSelector(e, id) => p"$e.$id"
 
     case FunctionInvocation(id, tps, args) =>
+      println("8")
       p"$id${nary(tps, ", ", "[", "]")}"
       if (args.nonEmpty) {
         p"($args)"
       }
 
     case Application(caller, args) =>
+      println("9")
       p"$caller($args)"
 
     case Lambda(Seq(vd), FunctionInvocation(id, Seq(), Seq(arg))) if vd.toVariable == arg =>
@@ -250,6 +436,7 @@ trait Printer {
       p"$l | $r"
     }
     case BVAnd(l, r) => optP {
+      println("01")
       p"$l & $r"
     }
     case BVShiftLeft(l, r) => optP {
@@ -394,6 +581,18 @@ trait Printer {
       optTparams.foreach(tparams => p"${nary(tparams.map(_.tp), ", ", "[", "]")}")
 
     case fd: FunDef =>
+      println("fundef")
+      //fd, 0 , f U (), (), (), ()
+      val res = convert(fd, 0, Seq() ++ Seq(fd.id), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
+      val s = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
+        "SIGNATURE " + "f0," + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.mkString("\n") +
+        "QUERY termination"
+
+      val fw = new java.io.FileWriter("example.ctrs");
+      fw.write(s)
+      fw.flush()
+      fw.close()
+
       for (an <- fd.flags) {
         p"""|@${an.asString(using ctx.opts)}
             |"""
@@ -408,7 +607,7 @@ trait Printer {
       p"${fd.fullBody}"
 
     case _ => ctx.sb.append("Tree? (" + tree.getClass + ")")
-  }
+  }}
 
   protected def ppSuffix(tree: Tree)(using ctx: PrinterContext): Unit = {
     if (ctx.opts.printTypes) {
