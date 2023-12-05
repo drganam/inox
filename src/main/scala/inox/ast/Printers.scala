@@ -133,90 +133,149 @@ trait Printer {
   case class RetDecl(fd: FunDef) extends Signature:
     override def toString(): String = "ret_"+fd.id.toString
 
-  case class Rule(tl: Term, tr: Term, c: Option[Formula]):
+  case class Rule(tl: Term, tr: Term, c: Option[ArithExpr]):
     override def toString(): String =
       val cString = c match
         case None => ""
         case Some(f) => " [" + f + "] "
       tl.toString + " -> " + tr.toString + cString + ";"
 
-
-  sealed abstract class Formula
-  case class FalseF() extends Formula:
-    override def toString(): String = "false"
-
-  case class TrueF() extends Formula:
-    override def toString(): String = "true"
-
-  case class VarF(id: Identifier) extends Formula:
-    override def toString(): String = id.toString
-
-  case class NotF(b: Formula) extends Formula:
-    override def toString(): String = "not(" + b.toString + ")"
-
-
   class Term()
 
   sealed abstract class ArithExpr
 
-  case class IntValueT(i: BigInt) extends ArithExpr:
-    override def toString(): String = i.toString
-  case class VarT(id: Identifier) extends ArithExpr:
-    override def toString(): String = id.toString
-  case class FunctionInvocationT(id: Identifier, args: Seq[ArithExpr]) extends ArithExpr:
-    override def toString(): String = id.toString + "(" + args.mkString(", ") + ")"
+  case class IntValueT(i: BigInt) extends ArithExpr
+  case class VarT(id: Identifier) extends ArithExpr
+  case class CallT(id: Identifier, args: Seq[ArithExpr]) extends ArithExpr
+  case class AddT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class SubT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class MulT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class DivT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class ModT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class AndT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class OrT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class GtT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class LtT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class LeT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class GeT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class EqT(a: ArithExpr, b: ArithExpr) extends ArithExpr
+  case class NotT(a: ArithExpr) extends ArithExpr
+  case class FalseT() extends ArithExpr
+  case class TrueT() extends ArithExpr
 
-  case class AddT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " + " + b.toString
-  case class SubT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " - " + b.toString
-  case class MulT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " * " + b.toString
-  case class DivT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " / " + b.toString
-  case class ModT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " mod " + b.toString
-  case class AndT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " /\\ " + b.toString
-  case class OrT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " \\/ " + b.toString
-  case class GtT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " > " + b.toString
-  case class LtT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " < " + b.toString
-  case class LeT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " <= " + b.toString
-  case class GeT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " >= " + b.toString
-  case class EqT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
-    override def toString(): String = a.toString + " = " + b.toString
-  case class NotT(a: ArithExpr) extends ArithExpr:
-    override def toString(): String = "not(" + a.toString + ")"
-
-  case class FunT(id: Identifier, args: Seq[ArithExpr]) extends ArithExpr:
-    override def toString(): String = id.toString + "(" + args.mkString(", ") + ")"
-
-  case class FalseT() extends ArithExpr:
-    override def toString(): String = "false"
-
-  case class TrueT() extends ArithExpr:
-    override def toString(): String = "true"
-
-  //case class ReturnT(id: Identifier, ret: ArithExpr) extends ArithExpr:
-  //  override def toString(): String = "ret_"+id.name + "(" + ret.toString + ")"
-
-
-  class Ret(id: Identifier, ret: Term) extends Term:
-    override def toString(): String = "ret_"+id.name + "(" + ret.toString + ")"
-
-  case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term:
-    override def toString(): String = fd.id.toString + "_" + id + "(" + t.mkString(", ") + ")"
-
+  case class Ret(id: Identifier, ret: Term) extends Term
+  case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
   class Expression() extends Term
-  case class FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) extends Expression:
-    override def toString(): String = id.toString + "(" + arith_expr.mkString(", ") + ")"
-  case class ExprT(arith_expr: ArithExpr) extends Expression:
-    override def toString(): String = arith_expr.toString
+  case class FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) extends Expression
+  case class ExprT(arith_expr: ArithExpr) extends Expression
+
+  protected def printCTRL(r: Rule): String =
+    val cString = r.c match
+      case None => ""
+      case Some(f) => " [" + printCTRL(f) + "] "
+    printCTRL(r.tl) + " -> " + printCTRL(r.tr) + cString + ";"
+
+  protected def printCTRL(t: Term): String = t match
+    case Ret(id, ret) =>
+      "ret_" + id.name + "(" + printCTRL(ret) + ")"
+    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
+      fd.id.toString + "_" + id + "(" + t.map(printCTRL(_)).mkString(", ") + ")"
+    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+      id.toString + "(" + arith_expr.map(printCTRL(_)).mkString(", ") + ")"
+    case ExprT(arith_expr) =>
+      printCTRL(arith_expr)
+
+  protected def printCTRL(e: ArithExpr): String = e match
+    case IntValueT(i: BigInt) =>
+      i.toString
+    case VarT(id: Identifier) =>
+      id.toString
+    case AddT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " + " + printCTRL(b)
+    case SubT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " - " + printCTRL(b)
+    case MulT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " * " + printCTRL(b)
+    case DivT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " / " + printCTRL(b)
+    case ModT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " mod " + printCTRL(b)
+    case AndT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " /\\ " + printCTRL(b)
+    case OrT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " \\/ " + printCTRL(b)
+    case GtT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " > " + printCTRL(b)
+    case LtT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " < " + printCTRL(b)
+    case LeT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " <= " + printCTRL(b)
+    case GeT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " >= " + printCTRL(b)
+    case EqT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " = " + printCTRL(b)
+    case NotT(a: ArithExpr) =>
+      "not(" + printCTRL(a) + ")"
+    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
+      id.toString + "(" + args.map(printCTRL(_)).mkString(", ") + ")"
+    case FalseT() =>
+      "false"
+    case TrueT() =>
+      "true"
+
+  protected def printAPROVE(r: Rule): String =
+    val cString = r.c match
+      case None => ""
+      case Some(f) => " :|: " + printAPROVE(f)
+    printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
+
+  protected def printAPROVE(t: Term): String = t match
+    case Ret(id, ret) =>
+      "ret_" + id.name + "(" + printAPROVE(ret) + ")"
+    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
+      fd.id.toString + "_" + id + "(" + t.map(printAPROVE(_)).mkString(", ") + ")"
+    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+      id.toString + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
+    case ExprT(arith_expr) =>
+      printAPROVE(arith_expr)
+
+  protected def printAPROVE(e: ArithExpr): String = e match
+    case IntValueT(i: BigInt) =>
+      i.toString
+    case VarT(id: Identifier) =>
+      id.toString
+    case AddT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " + " + printAPROVE(b)
+    case SubT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " - " + printAPROVE(b)
+    case MulT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " * " + printAPROVE(b)
+    case DivT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " / " + printAPROVE(b)
+    case ModT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " mod " + printAPROVE(b)
+    case AndT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " /\\ " + printAPROVE(b)
+    case OrT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " \\/ " + printAPROVE(b)
+    case GtT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " > " + printAPROVE(b)
+    case LtT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " < " + printAPROVE(b)
+    case LeT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " <= " + printAPROVE(b)
+    case GeT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " >= " + printAPROVE(b)
+    case EqT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " = " + printAPROVE(b)
+    case NotT(a: ArithExpr) =>
+      "!" + printAPROVE(a)
+    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
+      id.toString + "(" + args.map(printAPROVE(_)).mkString(", ") + ")"
+    case FalseT() =>
+      "false"
+    case TrueT() =>
+      "true"
 
 
 
@@ -256,6 +315,8 @@ trait Printer {
   // merge boolean formula duplication
 
   protected def evalExp(e: Tree)(using ctx: PrinterContext): ArithExpr = {
+    println("evalExp")
+    println(e)
     e match {
       case BooleanLiteral(true) => TrueT()
       case BooleanLiteral(false) => FalseT()
@@ -278,7 +339,7 @@ trait Printer {
       case Remainder(l, r) => ???
       case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
 
-      case FunctionInvocation(g, tps, args) => FunT(g, args.map(evalExp(_)))
+      case FunctionInvocation(g, tps, args) => CallT(g, args.map(evalExp(_)))
     }
   }
 
@@ -296,7 +357,6 @@ trait Printer {
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, None))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType), f))
-        println(R1)
         (S1, R1, i+1)
 
       case Let(b, d, e) =>
@@ -315,7 +375,7 @@ trait Printer {
         // to receive the fun call res.
         val r = VarT(new Identifier("fresh", 0, 0).freshen)
 
-        val R2 = R ++ Seq(Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(FunctionInvocationT(g, args.map(e => evalExp(e)))))), None), Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(r)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(r))), None))
+        val R2 = R ++ Seq(Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(CallT(g, args.map(e => evalExp(e)))))), None), Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(r)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(r))), None))
 
         val S2 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType), f),
           FunDecl(i+2, FunType(f.params.map(_.tpe), f.returnType), f))
@@ -351,7 +411,7 @@ trait Printer {
 
         //convert1(f, n, x, y, Σ′, R′, Ss)
 
-        // todo: this is code duplication? run convert1 for e even if there are no side effects ?
+        //todo: this is code duplication? run convert1 for e even if there are no side effects ?
         // val condition = e match {
         //   case BooleanLiteral(true) => TrueF()
         //   case BooleanLiteral(false) => FalseF()
@@ -365,15 +425,12 @@ trait Printer {
 
         val Rp = R ++ R2p ++ R3 ++
         Seq(Rule(Eval(j, f, xy_terms) , Eval(j+1, f, xy_terms), Some(condition))) ++
-        Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), Some(NotF(condition))))
+        Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), Some(NotT(condition))))
 
-        //println(Sp)
-        //println(Rp)
         (Sp, Rp, n)
       case els =>
         println("not let")
         println(els)
-        //println(Ss)
         (S, R, i+1)
     }
 
@@ -668,7 +725,7 @@ trait Printer {
       //fd, 0 , f U (), (), (), ()
       val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
       val s = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
-        "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.mkString("\n") +
+        "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.map(printAPROVE(_)).mkString("\n") +
         "\nQUERY termination"
 
        println(s)
