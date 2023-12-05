@@ -141,7 +141,7 @@ trait Printer {
       tl.toString + " -> " + tr.toString + cString + ";"
 
 
-  class Formula()
+  sealed abstract class Formula
   case class FalseF() extends Formula:
     override def toString(): String = "false"
 
@@ -157,7 +157,7 @@ trait Printer {
 
   class Term()
 
-  class ArithExpr //extends Term // todo fix
+  sealed abstract class ArithExpr
 
   case class IntValueT(i: BigInt) extends ArithExpr:
     override def toString(): String = i.toString
@@ -168,6 +168,14 @@ trait Printer {
 
   case class AddT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
     override def toString(): String = a.toString + " + " + b.toString
+  case class SubT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " - " + b.toString
+  case class MulT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " * " + b.toString
+  case class DivT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " / " + b.toString
+  case class ModT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
+    override def toString(): String = a.toString + " mod " + b.toString
   case class AndT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
     override def toString(): String = a.toString + " /\\ " + b.toString
   case class OrT(a: ArithExpr, b: ArithExpr) extends ArithExpr:
@@ -220,7 +228,11 @@ trait Printer {
 
 
     //1: find the term with id=i (last term)
-    val tla1 = R1.filter(_.tr match{ case Eval(id, _, _) => id == i1 }).head.tr
+    val tla1 = R1.filter(_.tr match{
+      case Eval(id, _, _) => id == i1
+      case a => println(a)
+        false
+      }).head.tr
     val fresh = VarT(new Identifier("fresh", 0, 0).freshen)
     //2: replace its return expression with  fresh variable
     val tla = tla1 match {
@@ -244,15 +256,24 @@ trait Printer {
       case BooleanLiteral(false) => FalseT()
       case IntegerLiteral(v) => IntValueT(v)
       case Variable(id, _, _) => VarT(id)
+
       case And(List(a: Tree, b: Tree)) => AndT(evalExp(a), evalExp(b))
       case Or(List(a: Tree, b: Tree)) => OrT(evalExp(a), evalExp(b))
       case LessThan(a, b) => LtT(evalExp(a), evalExp(b))
-      case GreaterThan(a, b) => GtT(evalExp(a), evalExp(b))
-      case LessEquals(a, b) => LeT(evalExp(a), evalExp(b))
-      case GreaterEquals(a, b) => GeT(evalExp(a), evalExp(b))
-      case Equals(a, b) => EqT(evalExp(a), evalExp(b))
+      case GreaterThan(l, r) => GtT(evalExp(l), evalExp(r))
+      case LessEquals(l, r) => LeT(evalExp(l), evalExp(r))
+      case GreaterEquals(l, r) => GeT(evalExp(l), evalExp(r))
+      case Equals(l, r) => EqT(evalExp(l), evalExp(r))
       case Not(a: Tree) => NotT(evalExp(a))
-      case Plus(a, b) => AddT(evalExp(a), evalExp(b))
+
+      case Plus(l, r) => AddT(evalExp(l), evalExp(r))
+      case Minus(l, r) => SubT(evalExp(l), evalExp(r))
+      case Times(l, r) => MulT(evalExp(l), evalExp(r))
+      case Division(l, r) => DivT(evalExp(l), evalExp(r))
+      case Remainder(l, r) => ???
+      case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
+
+
     }
   }
 
@@ -264,7 +285,7 @@ trait Printer {
       case BooleanLiteral(_) | Variable(_, _, _) | IntegerLiteral(_) |
            And(_) | Or(_)| Not(_) |
            LessThan(_, _) | GreaterThan(_, _) | LessEquals(_, _) | GreaterEquals(_, _) | Equals(_, _) |
-           Plus(_, _) =>
+           Plus(_, _) | Minus(_, _) | Times(_, _) | Division(_, _) | Modulo(_, _) =>
         // todo finish
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
@@ -283,7 +304,6 @@ trait Printer {
         convert1(f, j, x, y ++ Seq(b.id), S1, R1, e)
 
       case FunctionInvocation(g, tps, args) =>
-        //todo convert1 args
         //val ep = args.map(e => convert1(f, i, x, y, S, R, e)) // todo update i each time
         val ep = args.map(e => evalExp(e))
 
