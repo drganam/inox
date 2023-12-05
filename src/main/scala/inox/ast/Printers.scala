@@ -193,6 +193,9 @@ trait Printer {
   case class NotT(a: ArithExpr) extends ArithExpr:
     override def toString(): String = "not(" + a.toString + ")"
 
+  case class FunT(id: Identifier, args: Seq[ArithExpr]) extends ArithExpr:
+    override def toString(): String = id.toString + "(" + args.mkString(", ") + ")"
+
   case class FalseT() extends ArithExpr:
     override def toString(): String = "false"
 
@@ -214,6 +217,8 @@ trait Printer {
     override def toString(): String = id.toString + "(" + arith_expr.mkString(", ") + ")"
   case class ExprT(arith_expr: ArithExpr) extends Expression:
     override def toString(): String = arith_expr.toString
+
+
 
   protected def convert(f: FunDef, i: Int, x: Seq[Identifier], y: Seq[Identifier], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val tlb = FunOrig(f.id, x.map(VarT(_))++y.map(VarT(_))) // todo f's args instead of xy
@@ -273,7 +278,7 @@ trait Printer {
       case Remainder(l, r) => ???
       case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
 
-
+      case FunctionInvocation(g, tps, args) => FunT(g, args.map(evalExp(_)))
     }
   }
 
@@ -315,6 +320,7 @@ trait Printer {
         val S2 = S ++ Seq(FunDecl(i+1, FunType(f.params.map(_.tpe), f.returnType), f),
           FunDecl(i+2, FunType(f.params.map(_.tpe), f.returnType), f))
         (S2, R2, i+2)
+
       case IfExpr(e, ss, tt) =>
         println("If")
         val j = i
@@ -346,12 +352,13 @@ trait Printer {
         //convert1(f, n, x, y, Σ′, R′, Ss)
 
         // todo: this is code duplication? run convert1 for e even if there are no side effects ?
-        val condition = e match {
-          case BooleanLiteral(true) => TrueF()
-          case BooleanLiteral(false) => FalseF()
-          case Variable(id, _, _) => VarF(id) // todo
-          case _ =>  FalseF() // todo
-        }
+        // val condition = e match {
+        //   case BooleanLiteral(true) => TrueF()
+        //   case BooleanLiteral(false) => FalseF()
+        //   case Variable(id, _, _) => VarF(id) // todo
+        //   case _ =>  FalseF() // todo
+        // }
+        val condition = evalExp(e)
 
         val Sp = S ++ S2p ++ S3 ++ Seq(FunDecl(j+1, FunType(f.params.map(_.tpe), f.returnType), f),
                              FunDecl(k, FunType(f.params.map(_.tpe), f.returnType), f))
