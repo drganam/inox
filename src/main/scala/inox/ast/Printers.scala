@@ -129,11 +129,11 @@ trait Printer {
   class Signature()
   //case class VarDecl() extends Signature
   case class FunDecl(id: Int, t: FunType, fd: FunDef) extends Signature:
-    override def toString(): String = fd.id.toString + "_" + id
+    override def toString(): String = fd.id.uniqueName
   case class UserFunDecl(fd: FunDef) extends Signature:
-    override def toString(): String = fd.id.toString
+    override def toString(): String = fd.id.uniqueName
   case class RetDecl(fd: FunDef) extends Signature:
-    override def toString(): String = "ret_"+fd.id.toString
+    override def toString(): String = "ret_"+fd.id.uniqueName
 
   case class Rule(tl: Term, tr: Term, c: Option[ArithExpr]):
     override def toString(): String =
@@ -352,6 +352,11 @@ trait Printer {
 
   // printers for CTRL and APROVE
 
+  protected def printCTRL(s: Signature): String = s match
+    case FunDecl(id, t, fd) => fd.id.uniqueName + "_" + id
+    case UserFunDecl(fd) => fd.id.uniqueName
+    case RetDecl(fd) => "ret_"+fd.id.uniqueName
+
   protected def printCTRL(r: Rule): String =
     val cString = r.c match
       case None => ""
@@ -360,11 +365,11 @@ trait Printer {
 
   protected def printCTRL(t: Term): String = t match
     case Ret(id, ret) =>
-      "ret_" + id.name + "(" + printCTRL(ret) + ")"
+      "ret_" + id.uniqueName + "(" + printCTRL(ret) + ")"
     case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
-      fd.id.toString + "_" + id + "(" + t.map(printCTRL(_)).mkString(", ") + ")"
+      fd.id.uniqueName + "_" + id + "(" + t.map(printCTRL(_)).mkString(", ") + ")"
     case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
-      id.toString + "(" + arith_expr.map(printCTRL(_)).mkString(", ") + ")"
+      id.uniqueName + "(" + arith_expr.map(printCTRL(_)).mkString(", ") + ")"
     case ExprT(arith_expr) =>
       printCTRL(arith_expr)
 
@@ -372,7 +377,7 @@ trait Printer {
     case IntValueT(i: BigInt) =>
       i.toString
     case VarT(id: Identifier) =>
-      id.toString
+      id.uniqueName
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printCTRL(a) + " + " + printCTRL(b)
     case SubT(a: ArithExpr, b: ArithExpr) =>
@@ -400,7 +405,7 @@ trait Printer {
     case NotT(a: ArithExpr) =>
       "not(" + printCTRL(a) + ")"
     case CallT(id: Identifier, args: Seq[ArithExpr]) =>
-      id.toString + "(" + args.map(printCTRL(_)).mkString(", ") + ")"
+      id.uniqueName + "(" + args.map(printCTRL(_)).mkString(", ") + ")"
     case FalseT() =>
       "false"
     case TrueT() =>
@@ -416,9 +421,9 @@ trait Printer {
     case Ret(id, ret) =>
       "ret_" + id.name + "(" + printAPROVE(ret) + ")"
     case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
-      fd.id.toString + "_" + id + "(" + t.map(printAPROVE(_)).mkString(", ") + ")"
+      fd.id.uniqueName + "_" + id  + "(" + t.map(printAPROVE(_)).mkString(", ") + ")"
     case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
-      id.toString + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
+      id.uniqueName + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
     case ExprT(arith_expr) =>
       printAPROVE(arith_expr)
 
@@ -426,7 +431,7 @@ trait Printer {
     case IntValueT(i: BigInt) =>
       i.toString
     case VarT(id: Identifier) =>
-      id.name.toString + id.globalId.toString
+      id.uniqueName
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " + " + printAPROVE(b)
     case SubT(a: ArithExpr, b: ArithExpr) =>
@@ -454,7 +459,7 @@ trait Printer {
     case NotT(a: ArithExpr) =>
       "!" + printAPROVE(a)
     case CallT(id: Identifier, args: Seq[ArithExpr]) =>
-      id.toString + "(" + args.map(printAPROVE(_)).mkString(", ") + ")"
+      id.uniqueName + "(" + args.map(printAPROVE(_)).mkString(", ") + ")"
     case FalseT() =>
       "false"
     case TrueT() =>
@@ -750,19 +755,18 @@ trait Printer {
       println("fundef")
       //fd, 0 , f U (), (), (), ()
       val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
-      val s = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
-        "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.map(printCTRL(_)).mkString("\n") +
-        "\nQUERY termination"
+      val ctrl = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
+              "SIGNATURE " + res._1.map(printCTRL(_)).mkString(",") + " ;\n" +
+              "RULES\n" + res._2.map(printCTRL(_)).mkString("\n") +
+              "\nQUERY termination"
 
-      val a = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
-        "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.map(printAPROVE(_)).mkString("\n") +
-        "\nQUERY termination"
+      val aprove = res._2.map(printAPROVE(_)).mkString("\n")
 
-       println(s)
-       println(a)
+       println(ctrl)
+       println(aprove)
 
        val fw = new java.io.FileWriter("example.ctrs");
-       fw.write(s)
+       fw.write(ctrl)
        fw.flush()
        fw.close()
 
@@ -969,7 +973,7 @@ trait Printer {
               val name = if (ctx.opts.printUniqueIds) {
                 id.uniqueName
               } else {
-                id.toString
+                id.uniqueName
               }
               p"$name"
 
