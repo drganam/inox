@@ -259,7 +259,6 @@ trait Printer {
         convert1(f, j, x, y ++ Seq(b.id), S1, R1, e)
 
       case FunctionInvocation(g, tps, args) =>
-        //val ep = args.map(e => convert1(f, i, x, y, S, R, e)) // todo update i each time
         val ep = args.map(e => evalExp(e))
 
         // to receive the fun call res.
@@ -283,31 +282,64 @@ trait Printer {
         val R3 = res3._2
         val n =  res3._3
 
+        println("k:")
+        println(k)
+        println("n:")
+        println(n)
+
         val S2p = S2.filterNot(elem => elem match { case FunDecl(id, t, _) => id == k })
+        // two adjustments for fk and fn:
+        // 1: skip the else branch in numbering - fk becomes fn
+        // 2: remove what's out of scope outside of then/else branches:
+        //        in Rk, keep only the first |xy| params plus the last one (ret)
+        //        in Rn, keep only the first |xy| params plus the last one (ret)
+
         val R2p = R2.map(elem => elem match {
           case Rule(tl, tr, c) =>
             tl match {
               case Eval(id, f, arith_expr) if id == k =>
-                Rule(Eval(n, f, arith_expr), tr, c)
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(Eval(n, f, t), tr, c)
               case _ => elem
             }
             tr match {
               case Eval(id, f, arith_expr) if id == k =>
-                Rule(tl, Eval(n, f, arith_expr), c)
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(tl, Eval(n, f, t), c)
               case _ => elem
             }
-          case _ => elem
         })
 
-        //convert1(f, n, x, y, Σ′, R′, Ss)
+        val R3p = R3.map(elem => elem match {
+          case Rule(tl, tr, c) =>
+            tl match {
+              case Eval(id, f, arith_expr) if id == n =>
+                println("substl")
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(Eval(n, f, t), tr, c)
+              case _ => elem
+            }
+            tr match {
+              case Eval(id, f, arith_expr) if id == n =>
+                println("substr")
+                println((x++y))
+                println(arith_expr)
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                println(t)
+                Rule(tl, Eval(n, f, t), c)
+              case _ => elem
+            }
+        })
+
         val condition = evalExp(e)
 
-        val Sp = S ++ S2p ++ S3 ++ Seq(FunDecl(j+1, FunType(f.params.map(_.tpe), f.returnType), f),
-                             FunDecl(k, FunType(f.params.map(_.tpe), f.returnType), f))
+        val Sp = S ++ Seq(FunDecl(j+1, FunType(f.params.map(_.tpe), f.returnType), f),
+                          FunDecl(k, FunType(f.params.map(_.tpe), f.returnType), f)) ++ S2p ++ S3
 
-        val Rp = R ++ R2p ++ R3 ++
+        val Rp = R ++
         Seq(Rule(Eval(j, f, xy_terms) , Eval(j+1, f, xy_terms), Some(condition))) ++
-        Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), Some(NotT(condition))))
+        Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), Some(NotT(condition)))) ++
+        R2p ++ R3p
 
         (Sp, Rp, n)
       case els =>
