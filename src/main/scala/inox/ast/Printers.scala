@@ -121,7 +121,9 @@ trait Printer {
     }
   }
 
-  class BaseSort()
+  // trs trees
+
+  //class BaseSort()
   case class FunType(args: Seq[Type], ret: Type)
 
   class Signature()
@@ -143,7 +145,6 @@ trait Printer {
   class Term()
 
   sealed abstract class ArithExpr
-
   case class IntValueT(i: BigInt) extends ArithExpr
   case class VarT(id: Identifier) extends ArithExpr
   case class CallT(id: Identifier, args: Seq[ArithExpr]) extends ArithExpr
@@ -169,120 +170,13 @@ trait Printer {
   case class FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) extends Expression
   case class ExprT(arith_expr: ArithExpr) extends Expression
 
-  protected def printCTRL(r: Rule): String =
-    val cString = r.c match
-      case None => ""
-      case Some(f) => " [" + printCTRL(f) + "] "
-    printCTRL(r.tl) + " -> " + printCTRL(r.tr) + cString + ";"
-
-  protected def printCTRL(t: Term): String = t match
-    case Ret(id, ret) =>
-      "ret_" + id.name + "(" + printCTRL(ret) + ")"
-    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
-      fd.id.toString + "_" + id + "(" + t.map(printCTRL(_)).mkString(", ") + ")"
-    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
-      id.toString + "(" + arith_expr.map(printCTRL(_)).mkString(", ") + ")"
-    case ExprT(arith_expr) =>
-      printCTRL(arith_expr)
-
-  protected def printCTRL(e: ArithExpr): String = e match
-    case IntValueT(i: BigInt) =>
-      i.toString
-    case VarT(id: Identifier) =>
-      id.toString
-    case AddT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " + " + printCTRL(b)
-    case SubT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " - " + printCTRL(b)
-    case MulT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " * " + printCTRL(b)
-    case DivT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " / " + printCTRL(b)
-    case ModT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " mod " + printCTRL(b)
-    case AndT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " /\\ " + printCTRL(b)
-    case OrT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " \\/ " + printCTRL(b)
-    case GtT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " > " + printCTRL(b)
-    case LtT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " < " + printCTRL(b)
-    case LeT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " <= " + printCTRL(b)
-    case GeT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " >= " + printCTRL(b)
-    case EqT(a: ArithExpr, b: ArithExpr) =>
-      printCTRL(a) + " = " + printCTRL(b)
-    case NotT(a: ArithExpr) =>
-      "not(" + printCTRL(a) + ")"
-    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
-      id.toString + "(" + args.map(printCTRL(_)).mkString(", ") + ")"
-    case FalseT() =>
-      "false"
-    case TrueT() =>
-      "true"
-
-  protected def printAPROVE(r: Rule): String =
-    val cString = r.c match
-      case None => ""
-      case Some(f) => " :|: " + printAPROVE(f)
-    printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
-
-  protected def printAPROVE(t: Term): String = t match
-    case Ret(id, ret) =>
-      "ret_" + id.name + "(" + printAPROVE(ret) + ")"
-    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
-      fd.id.toString + "_" + id + "(" + t.map(printAPROVE(_)).mkString(", ") + ")"
-    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
-      id.toString + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
-    case ExprT(arith_expr) =>
-      printAPROVE(arith_expr)
-
-  protected def printAPROVE(e: ArithExpr): String = e match
-    case IntValueT(i: BigInt) =>
-      i.toString
-    case VarT(id: Identifier) =>
-      id.toString
-    case AddT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " + " + printAPROVE(b)
-    case SubT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " - " + printAPROVE(b)
-    case MulT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " * " + printAPROVE(b)
-    case DivT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " / " + printAPROVE(b)
-    case ModT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " mod " + printAPROVE(b)
-    case AndT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " /\\ " + printAPROVE(b)
-    case OrT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " \\/ " + printAPROVE(b)
-    case GtT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " > " + printAPROVE(b)
-    case LtT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " < " + printAPROVE(b)
-    case LeT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " <= " + printAPROVE(b)
-    case GeT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " >= " + printAPROVE(b)
-    case EqT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " = " + printAPROVE(b)
-    case NotT(a: ArithExpr) =>
-      "!" + printAPROVE(a)
-    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
-      id.toString + "(" + args.map(printAPROVE(_)).mkString(", ") + ")"
-    case FalseT() =>
-      "false"
-    case TrueT() =>
-      "true"
 
 
+  // conversion
 
   protected def convert(f: FunDef, i: Int, x: Seq[Identifier], y: Seq[Identifier], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val tlb = FunOrig(f.id, x.map(VarT(_))++y.map(VarT(_))) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e))))
-
 
     val res = convert1(f, i, x, y, S, R, Ss)
 
@@ -290,11 +184,12 @@ trait Printer {
     val R1 = res._2
     val i1 = res._3
 
-
     //1: find the term with id=i (last term)
     val tla1 = R1.filter(_.tr match{
       case Eval(id, _, _) => id == i1
-      case a => println(a)
+      case a =>
+        println("SEE LINE 193")
+        println(a)
         false
       }).head.tr
     val fresh = VarT(new Identifier("fresh", 0, 0).freshen)
@@ -308,15 +203,10 @@ trait Printer {
     val R2 = R1 ++ Seq(Rule(tlb, trb, None), Rule(tla, tra, None))
     val S2 = Seq(UserFunDecl(f), FunDecl(0, FunType(f.params.map(_.tpe), f.returnType), f)) ++ S1 ++ Seq(RetDecl(f))
     (S2, R2, i1)
-
   }
 
-  // todo
-  // merge boolean formula duplication
 
   protected def evalExp(e: Tree)(using ctx: PrinterContext): ArithExpr = {
-    println("evalExp")
-    println(e)
     e match {
       case BooleanLiteral(true) => TrueT()
       case BooleanLiteral(false) => FalseT()
@@ -410,14 +300,6 @@ trait Printer {
         })
 
         //convert1(f, n, x, y, Σ′, R′, Ss)
-
-        //todo: this is code duplication? run convert1 for e even if there are no side effects ?
-        // val condition = e match {
-        //   case BooleanLiteral(true) => TrueF()
-        //   case BooleanLiteral(false) => FalseF()
-        //   case Variable(id, _, _) => VarF(id) // todo
-        //   case _ =>  FalseF() // todo
-        // }
         val condition = evalExp(e)
 
         val Sp = S ++ S2p ++ S3 ++ Seq(FunDecl(j+1, FunType(f.params.map(_.tpe), f.returnType), f),
@@ -435,6 +317,118 @@ trait Printer {
     }
 
   }
+
+  // printers for CTRL and APROVE
+
+  protected def printCTRL(r: Rule): String =
+    val cString = r.c match
+      case None => ""
+      case Some(f) => " [" + printCTRL(f) + "] "
+    printCTRL(r.tl) + " -> " + printCTRL(r.tr) + cString + ";"
+
+  protected def printCTRL(t: Term): String = t match
+    case Ret(id, ret) =>
+      "ret_" + id.name + "(" + printCTRL(ret) + ")"
+    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
+      fd.id.toString + "_" + id + "(" + t.map(printCTRL(_)).mkString(", ") + ")"
+    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+      id.toString + "(" + arith_expr.map(printCTRL(_)).mkString(", ") + ")"
+    case ExprT(arith_expr) =>
+      printCTRL(arith_expr)
+
+  protected def printCTRL(e: ArithExpr): String = e match
+    case IntValueT(i: BigInt) =>
+      i.toString
+    case VarT(id: Identifier) =>
+      id.toString
+    case AddT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " + " + printCTRL(b)
+    case SubT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " - " + printCTRL(b)
+    case MulT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " * " + printCTRL(b)
+    case DivT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " / " + printCTRL(b)
+    case ModT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " mod " + printCTRL(b)
+    case AndT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " /\\ " + printCTRL(b)
+    case OrT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " \\/ " + printCTRL(b)
+    case GtT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " > " + printCTRL(b)
+    case LtT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " < " + printCTRL(b)
+    case LeT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " <= " + printCTRL(b)
+    case GeT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " >= " + printCTRL(b)
+    case EqT(a: ArithExpr, b: ArithExpr) =>
+      printCTRL(a) + " = " + printCTRL(b)
+    case NotT(a: ArithExpr) =>
+      "not(" + printCTRL(a) + ")"
+    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
+      id.toString + "(" + args.map(printCTRL(_)).mkString(", ") + ")"
+    case FalseT() =>
+      "false"
+    case TrueT() =>
+      "true"
+
+  protected def printAPROVE(r: Rule): String =
+    val cString = r.c match
+      case None => ""
+      case Some(f) => " :|: " + printAPROVE(f)
+    printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
+
+  protected def printAPROVE(t: Term): String = t match
+    case Ret(id, ret) =>
+      "ret_" + id.name + "(" + printAPROVE(ret) + ")"
+    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
+      fd.id.toString + "_" + id + "(" + t.map(printAPROVE(_)).mkString(", ") + ")"
+    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+      id.toString + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
+    case ExprT(arith_expr) =>
+      printAPROVE(arith_expr)
+
+  protected def printAPROVE(e: ArithExpr): String = e match
+    case IntValueT(i: BigInt) =>
+      i.toString
+    case VarT(id: Identifier) =>
+      id.name.toString + id.globalId.toString
+    case AddT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " + " + printAPROVE(b)
+    case SubT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " - " + printAPROVE(b)
+    case MulT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " * " + printAPROVE(b)
+    case DivT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " / " + printAPROVE(b)
+    case ModT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " mod " + printAPROVE(b)
+    case AndT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " /\\ " + printAPROVE(b)
+    case OrT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " \\/ " + printAPROVE(b)
+    case GtT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " > " + printAPROVE(b)
+    case LtT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " < " + printAPROVE(b)
+    case LeT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " <= " + printAPROVE(b)
+    case GeT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " >= " + printAPROVE(b)
+    case EqT(a: ArithExpr, b: ArithExpr) =>
+      printAPROVE(a) + " = " + printAPROVE(b)
+    case NotT(a: ArithExpr) =>
+      "!" + printAPROVE(a)
+    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
+      id.toString + "(" + args.map(printAPROVE(_)).mkString(", ") + ")"
+    case FalseT() =>
+      "false"
+    case TrueT() =>
+      "true"
+
+  // existing INOX printing
 
   protected def ppBody(tree: Tree)(using ctx: PrinterContext): Unit = {
   //println("ppBody")
@@ -725,10 +719,15 @@ trait Printer {
       //fd, 0 , f U (), (), (), ()
       val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
       val s = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
+        "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.map(printCTRL(_)).mkString("\n") +
+        "\nQUERY termination"
+
+      val a = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
         "SIGNATURE " + res._1.mkString(",") + " ;\n" + "RULES\n" + res._2.map(printAPROVE(_)).mkString("\n") +
         "\nQUERY termination"
 
        println(s)
+       println(a)
 
        val fw = new java.io.FileWriter("example.ctrs");
        fw.write(s)
