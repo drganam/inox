@@ -291,13 +291,6 @@ trait Printer {
         val R3 = res3._2
         val n =  res3._3
 
-        println("k:")
-        println(k)
-        println("n:")
-        println(n)
-
-
-
         // two adjustments for fk and fn:
         // 1: skip the else branch in numbering - fk becomes fn
         // 2: remove what's out of scope outside of then/else branches:
@@ -324,18 +317,13 @@ trait Printer {
           case Rule(tl, tr, c) =>
             tl match {
               case Eval(id, f, arith_expr) if id == n =>
-                println("substl")
                 val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
                 Rule(Eval(n, f, t), tr, c)
               case _ => elem
             }
             tr match {
               case Eval(id, f, arith_expr) if id == n =>
-                println("substr")
-                println((x++y))
-                println(arith_expr)
                 val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
-                println(t)
                 Rule(tl, Eval(n, f, t), c)
               case _ => elem
             }
@@ -388,7 +376,7 @@ trait Printer {
     "RULES\n" + ctrs._2.map(printCTRL(_)).mkString("\n") +
     "\nQUERY termination"
 
-  // todo print types as well
+  // todo: allow print without types as well
   protected def printCTRL(s: Signature): String = s match
     case FunDecl(id, t, fd) =>
       fd.id.uniqueName + "_" + id + " : " +
@@ -463,7 +451,7 @@ trait Printer {
     case _ => t.toString
 
   protected def printAPROVE(ctrs: (Seq[Signature], Seq[Rule])): String =
-    "(VAR " + ")\n" +
+    "(VAR " + printAPROVE(ctrs._2).distinct.mkString(" ") + ")\n" +
     "(RULES\n" + ctrs._2.map(printAPROVE(_)).mkString("\n") + "\n)"
 
   protected def printAPROVE(r: Rule): String =
@@ -473,10 +461,21 @@ trait Printer {
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
 
   // TODO print VAR list
-  protected def printAPROVE(s: Signature): String = s match
-    case FunDecl(id, t, fd) => ""
-    case UserFunDecl(fd) => ""
-    case RetDecl(fd) => ""
+  protected def printAPROVE(r: Seq[Rule]): List[String] =
+    val t = r.map(e => List(e.tr, e.tl)).flatten
+    t.toList.map(ter => ter match
+      case Ret(id, ret) =>
+        List() //"ret_" + id.name + "(" + printAPROVE(ret) + ")"
+      case Eval(id, fd, t) =>
+        t.map(e => e match
+          case ExprT(VarT(id, _)) => Some(id)
+          case _ => None
+        ).toList.flatten.map(_.uniqueName)
+      case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+        List() //id.uniqueName + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
+      case ExprT(arith_expr) =>
+        List() //printAPROVE(arith_expr)
+    ).flatten
 
   protected def printAPROVE(t: Term): String = t match
     case Ret(id, ret) =>
