@@ -121,28 +121,21 @@ trait Printer {
     }
   }
 
-  // trs trees
+  // TRS trees
 
   //class BaseSort()
   case class FunType(args: Seq[Type], ret: Type)
 
-  class Signature()
+  sealed abstract class Signature
   //case class VarDecl() extends Signature
-  case class FunDecl(id: Int, t: FunType, fd: FunDef) extends Signature:
-    override def toString(): String = fd.id.uniqueName
-  case class UserFunDecl(fd: FunDef) extends Signature:
-    override def toString(): String = fd.id.uniqueName
-  case class RetDecl(fd: FunDef) extends Signature:
-    override def toString(): String = "ret_"+fd.id.uniqueName
 
-  case class Rule(tl: Term, tr: Term, c: Option[ArithExpr]):
-    override def toString(): String =
-      val cString = c match
-        case None => ""
-        case Some(f) => " [" + f + "] "
-      tl.toString + " -> " + tr.toString + cString + ";"
+  case class FunDecl(id: Int, t: FunType, fd: FunDef) extends Signature
+  case class UserFunDecl(fd: FunDef) extends Signature
+  case class RetDecl(fd: FunDef) extends Signature
 
-  class Term()
+  case class Rule(tl: Term, tr: Term, c: Option[ArithExpr])
+
+  sealed abstract class Term
 
   sealed abstract class ArithExpr
   case class IntValueT(i: BigInt) extends ArithExpr
@@ -166,7 +159,7 @@ trait Printer {
 
   case class Ret(id: Identifier, ret: Term) extends Term
   case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
-  class Expression() extends Term
+  sealed abstract class Expression extends Term
   case class FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) extends Expression
   case class ExprT(arith_expr: ArithExpr) extends Expression
 
@@ -202,6 +195,7 @@ trait Printer {
 
     val R2 = R1 ++ Seq(Rule(tlb, trb, None), Rule(tla, tra, None))
     val S2 = Seq(UserFunDecl(f), FunDecl(0, FunType(f.params.map(_.tpe), f.returnType), f)) ++ S1 ++ Seq(RetDecl(f))
+
     (S2, R2, i1)
   }
 
@@ -287,7 +281,11 @@ trait Printer {
         println("n:")
         println(n)
 
-        val S2p = S2.filterNot(elem => elem match { case FunDecl(id, t, _) => id == k })
+        val S2p = S2.filterNot(elem => elem match {
+          case FunDecl(id, t, _) => id == k
+          case _ => false
+          })
+
         // two adjustments for fk and fn:
         // 1: skip the else branch in numbering - fk becomes fn
         // 2: remove what's out of scope outside of then/else branches:
@@ -352,6 +350,13 @@ trait Printer {
 
   // printers for CTRL and APROVE
 
+  protected def printCTRL(ctrs: (Seq[Signature], Seq[Rule])): String =
+    "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
+    "SIGNATURE " + ctrs._1.map(printCTRL(_)).mkString(",") + " ;\n" +
+    "RULES\n" + ctrs._2.map(printCTRL(_)).mkString("\n") +
+    "\nQUERY termination"
+
+  // todo print types as well
   protected def printCTRL(s: Signature): String = s match
     case FunDecl(id, t, fd) => fd.id.uniqueName + "_" + id
     case UserFunDecl(fd) => fd.id.uniqueName
@@ -411,11 +416,21 @@ trait Printer {
     case TrueT() =>
       "true"
 
+  protected def printAPROVE(ctrs: (Seq[Signature], Seq[Rule])): String =
+    "(VAR " + ")\n" +
+    "(RULES\n" + ctrs._2.map(printAPROVE(_)).mkString("\n") + "\n)"
+
   protected def printAPROVE(r: Rule): String =
     val cString = r.c match
       case None => ""
       case Some(f) => " :|: " + printAPROVE(f)
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
+
+  // TODO print VAR list
+  protected def printAPROVE(s: Signature): String = s match
+    case FunDecl(id, t, fd) => ""
+    case UserFunDecl(fd) => ""
+    case RetDecl(fd) => ""
 
   protected def printAPROVE(t: Term): String = t match
     case Ret(id, ret) =>
@@ -755,20 +770,19 @@ trait Printer {
       println("fundef")
       //fd, 0 , f U (), (), (), ()
       val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(_.id), Seq(), Seq(), fd.fullBody)
-      val ctrl = "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
-              "SIGNATURE " + res._1.map(printCTRL(_)).mkString(",") + " ;\n" +
-              "RULES\n" + res._2.map(printCTRL(_)).mkString("\n") +
-              "\nQUERY termination"
+      val ctrl = printCTRL((res._1, res._2))
 
-      val aprove = res._2.map(printAPROVE(_)).mkString("\n")
+      val aprove = printAPROVE((res._1, res._2))
 
-       println(ctrl)
-       println(aprove)
+      println("CTRL export:")
+      println(ctrl)
+      println("APROVE export:")
+      println(aprove)
 
-       val fw = new java.io.FileWriter("example.ctrs");
-       fw.write(ctrl)
-       fw.flush()
-       fw.close()
+      val fw = new java.io.FileWriter("example.ctrs");
+      fw.write(ctrl)
+      fw.flush()
+      fw.close()
 
       for (an <- fd.flags) {
         p"""|@${an.asString(using ctx.opts)}
