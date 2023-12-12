@@ -172,7 +172,8 @@ trait Printer {
     val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2))++y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
 
-    val res = convert1(f, i, x, y, S, R, Ss)
+    println(insertLets(shortCircuit(Ss)))
+    val res = convert1(f, i, x, y, S, R, insertLets(shortCircuit(Ss)))
 
     val S1 = res._1
     val R1 = res._2
@@ -523,6 +524,119 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
+
+
+  // preparation
+
+  protected def insertLets(t: Expr): Expr = t match
+    case And(List(a: Expr, b: Expr)) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), And(List(freshA, freshB))))
+    case Or(List(a: Expr, b: Expr)) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Or(List(freshA, freshB))))
+    case Let(b, d, e) =>
+      Let(b, d, insertLets(e))
+    case IfExpr(e, ss, tt) =>
+      IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
+    case FunctionInvocation(g, tps, args) =>
+      def chain(l: Seq[Expr], freshs: List[Variable]): Let = l match
+        case x::Nil =>
+          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List()) //todo type
+          Let(freshA.toVal, insertLets(x), FunctionInvocation(g, tps, freshs++List(freshA)))
+        case(x::xs) =>
+          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List()) //todo type
+          Let(freshA.toVal, insertLets(x), chain(xs, freshs++List(freshA)))
+      if (args.isEmpty) FunctionInvocation(g, tps, args)
+      else chain(args, List())
+    case BooleanLiteral(_) => t
+    case IntegerLiteral(_) => t
+    case Variable(_, _, _) => t
+    case LessThan(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), LessThan(freshA, freshB)))
+    case GreaterThan(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), GreaterThan(freshA, freshB)))
+    case LessEquals(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), LessEquals(freshA, freshB)))
+    case GreaterEquals(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), GreaterEquals(freshA, freshB)))
+    // todo types for a, b
+    case Equals(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Equals(freshA, freshB)))
+    case Not(a: Tree) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      Let(freshA.toVal, insertLets(a), Not(freshA))
+    case Plus(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Plus(freshA, freshB)))
+    case Minus(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Minus(freshA, freshB)))
+    case Times(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Times(freshA, freshB)))
+    case Division(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Division(freshA, freshB)))
+    case Remainder(a, b) => ???
+    case Modulo(a, b) =>
+      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Modulo(freshA, freshB)))
+    case _ => t
+
+    // a && b
+    // if (a) b else false
+    // a || b
+    // if (a) true else b
+
+  protected def shortCircuit(t: Expr): Expr = t match
+    case And(List(a: Expr, b: Expr)) =>
+      IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
+    case Or(List(a: Expr, b: Expr)) =>
+      IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
+    case Let(b, d, e) =>
+      Let(b, shortCircuit(d), shortCircuit(e))
+    case IfExpr(e, ss, tt) =>
+      IfExpr(shortCircuit(e), shortCircuit(ss), shortCircuit(tt))
+    case FunctionInvocation(g, tps, args) =>
+      FunctionInvocation(g, tps, args.map(shortCircuit(_)))
+    case BooleanLiteral(_) => t
+    case IntegerLiteral(_) => t
+    case Variable(_, _, _) => t
+    case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
+    case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
+    case LessEquals(l, r) => LessEquals(shortCircuit(l), shortCircuit(r))
+    case GreaterEquals(l, r) => GreaterEquals(shortCircuit(l), shortCircuit(r))
+    case Equals(l, r) => Equals(shortCircuit(l), shortCircuit(r))
+    case Not(a: Tree) => Not(shortCircuit(a))
+    case Plus(l, r) => Plus(shortCircuit(l), shortCircuit(r))
+    case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
+    case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
+    case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
+    case Remainder(l, r) => ???
+    case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
+    case _ =>
+      println("other")
+      println(t)
+      t
+
 
   // existing INOX printing
 
