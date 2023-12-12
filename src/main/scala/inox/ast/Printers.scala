@@ -528,7 +528,7 @@ trait Printer {
 
   // preparation
 
-  protected def insertLets(t: Expr): Expr = t match
+  protected def insertLets(t: Expr)(using ctx: PrinterContext): Expr = t match
     case And(List(a: Expr, b: Expr)) =>
       val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
       val freshB = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
@@ -544,10 +544,10 @@ trait Printer {
     case FunctionInvocation(g, tps, args) =>
       def chain(l: Seq[Expr], freshs: List[Variable]): Let = l match
         case x::Nil =>
-          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List()) //todo type
+          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List()) //todo type
           Let(freshA.toVal, insertLets(x), FunctionInvocation(g, tps, freshs++List(freshA)))
         case(x::xs) =>
-          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List()) //todo type
+          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List()) //todo type
           Let(freshA.toVal, insertLets(x), chain(xs, freshs++List(freshA)))
       if (args.isEmpty) FunctionInvocation(g, tps, args)
       else chain(args, List())
@@ -943,6 +943,11 @@ trait Printer {
         fw.write(ctrl)
         fw.flush()
         fw.close()
+
+        val fw_aprove = new java.io.FileWriter("example.itrs");
+        fw_aprove.write(aprove)
+        fw_aprove.flush()
+        fw_aprove.close()
 
       }
 
