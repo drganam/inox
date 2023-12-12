@@ -168,7 +168,7 @@ trait Printer {
 
   // conversion
 
-  protected def convert(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
+  protected def convert(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Expr)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2))++y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
 
@@ -273,7 +273,6 @@ trait Printer {
           Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(CallT(g, args.map(e => evalExp(e)))))), None),
           Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(r)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(r))), None))
 
-
         val S2 = S ++ Seq(
           FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(restp), f.returnType), f),
           FunDecl(i+2, FunType(xy.map(_._2) ++ Seq(restp), f.returnType), f))
@@ -335,12 +334,7 @@ trait Printer {
           case FunDecl(id, t, _) => id == k
           case _ =>
             false
-        ).map(elem => elem match
-            case FunDecl(id, t, fun) =>
-              FunDecl(id, FunType(t.args.take((x++y).size) ++ Seq(t.args.last), t.ret),fun)
-            case _ =>
-              elem
-          )
+        )
 
         val S3p = S3.map(elem => elem match
           case FunDecl(id, t, fun) if id == n =>
