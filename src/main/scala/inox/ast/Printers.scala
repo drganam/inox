@@ -163,7 +163,7 @@ trait Printer {
   case class ExprT(arith_expr: ArithExpr) extends Expression
 
 
-  case class Rule(tl: Term, tr: Term, c: Option[ArithExpr]) // c is ArithExpr even though it must be of type Boolean
+  case class Rule(tl: Term, tr: Term, c: Option[ArithExpr] = None) // c is ArithExpr even though it must be of type Boolean
 
 
   // conversion
@@ -187,16 +187,17 @@ trait Printer {
         println(a)
         false
       }).head.tr
-    val fresh = VarT(new Identifier("fresh", 0, 0).freshen, f.returnType)
+
+    val ret = VarT(new Identifier("ret", 0, 0).freshen, f.returnType)
     //2: replace its return expression with a fresh variable
     // todo: is this mandatory ?
     val tla = tla1 match {
-      case Eval(id, f, arith_expr) => Eval(id, f, arith_expr.init ++ Seq(ExprT(fresh)))
+      case Eval(id, f, arith_expr) => Eval(id, f, arith_expr.init ++ Seq(ExprT(ret)))
       case a => a }
-    //3: right hand side is a ret term (or error term)
-    val tra = Ret(f.id, ExprT(fresh))
+    //3: right hand side is a ret term (or error term ?)
+    val tra = Ret(f.id, ExprT(ret))
 
-    val R2 = R1 ++ Seq(Rule(tlb, trb, None), Rule(tla, tra, None))
+    val R2 = Seq(Rule(tlb, trb)) ++ R1 ++ Seq(Rule(tlb, trb))
     val S2 = Seq(UserFunDecl(f), FunDecl(0, FunType(f.params.map(_.tpe), f.returnType), f)) ++ S1 ++ Seq(RetDecl(f))
 
     (S2, R2, i1)
@@ -230,33 +231,29 @@ trait Printer {
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val xy = x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))
     val xy_terms = xy.map(ExprT(_))
+    //x.map((ctx.opts.symbols.get.sorts ++ ctx.opts.symbols.get.functions)(_))
     Ss match {
       case BooleanLiteral(_) | And(_) | Or(_)| Not(_) | Equals(_, _) |
            LessThan(_, _) | GreaterThan(_, _) | LessEquals(_, _) | GreaterEquals(_, _)  =>
-        // todo finish
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
-        val R1 = R ++ Seq(Rule(tl, tr, None))
+        val R1 = R ++ Seq(Rule(tl, tr))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(BooleanType()), f.returnType), f))
         (S1, R1, i+1)
       case IntegerLiteral(_) | Plus(_, _) | Minus(_, _) | Times(_, _) | Division(_, _) | Modulo(_, _) =>
-        // todo finish
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
-        val R1 = R ++ Seq(Rule(tl, tr, None))
+        val R1 = R ++ Seq(Rule(tl, tr))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(IntegerType()), f.returnType), f))
         (S1, R1, i+1)
       case Variable(_, t, _) =>
-        // todo finish
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
-        val R1 = R ++ Seq(Rule(tl, tr, None))
+        val R1 = R ++ Seq(Rule(tl, tr))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
 
       case Let(b, d, e) =>
-        println("Let")
-        //x.map((ctx.opts.symbols.get.sorts ++ ctx.opts.symbols.get.functions)(_))
         val convert_d = convert1(f, i, x, y, Seq(), Seq(), d)
         val S1 = S ++ convert_d._1
         val R1 = R ++ convert_d._2
@@ -264,30 +261,28 @@ trait Printer {
         convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S1, R1, e)
 
       case FunctionInvocation(g, tps, args) =>
-        val ep = args.map(e => evalExp(e))
-
         // to receive the fun call res.
-        val restp = ctx.opts.symbols.get.functions(g).returnType
-        val r = VarT(new Identifier("fresh", 0, 0).freshen, restp)
+        val retTpe = ctx.opts.symbols.get.functions(g).returnType
+        val ret = VarT(new Identifier("fresh", 0, 0).freshen, retTpe)
 
         val R2 = R ++ Seq(
-          Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(CallT(g, args.map(e => evalExp(e)))))), None),
-          Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(r)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(r))), None))
+          Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(CallT(g, args.map(e => evalExp(e))))))),
+          Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(ret)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(ret)))))
 
         val S2 = S ++ Seq(
-          FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(restp), f.returnType), f),
-          FunDecl(i+2, FunType(xy.map(_._2) ++ Seq(restp), f.returnType), f))
-
+          FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(retTpe), f.returnType), f),
+          FunDecl(i+2, FunType(xy.map(_._2) ++ Seq(retTpe), f.returnType), f))
 
         (S2, R2, i+2)
 
       case IfExpr(e, ss, tt) =>
-        println("If")
         val j = i
+        // convert then branch:
         val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
         val S2 = res2._1
         val R2 = res2._2
         val k =  res2._3
+        //convert else branch:
         val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt)
         val S3 = res3._1
         val R3 = res3._2
@@ -333,20 +328,16 @@ trait Printer {
 
         val S2p = S2.filterNot(elem => elem match
           case FunDecl(id, t, _) => id == k
-          case _ =>
-            false
+          case _ => false
         )
 
         val S3p = S3.map(elem => elem match
           case FunDecl(id, t, fun) if id == n =>
             FunDecl(id, FunType(t.args.take((x++y).size) ++ Seq(t.args.last), t.ret),fun)
-          case _ =>
-            elem
-          )
+          case _ => elem
+        )
 
         val condition = evalExp(e)
-
-        //val d: Seq[Definition] = ((ctx.opts.symbols.get.sorts ++ ctx.opts.symbols.get.functions)(_))
 
         val Sp = S ++ Seq(
                 FunDecl(j+1, FunType(xy.map(_._2), f.returnType), f),
@@ -359,8 +350,9 @@ trait Printer {
                 R2p ++ R3p
 
         (Sp, Rp, n)
+
       case els =>
-        println("not let")
+        println("new case")
         println(els)
         (S, R, i+1)
     }
@@ -530,24 +522,24 @@ trait Printer {
 
   protected def insertLets(t: Expr)(using ctx: PrinterContext): Expr = t match
     case And(List(a: Expr, b: Expr)) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), And(List(freshA, freshB))))
     case Or(List(a: Expr, b: Expr)) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Or(List(freshA, freshB))))
     case Let(b, d, e) =>
-      Let(b, d, insertLets(e))
+      Let(b, insertLets(d), insertLets(e))
     case IfExpr(e, ss, tt) =>
       IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
     case FunctionInvocation(g, tps, args) =>
       def chain(l: Seq[Expr], freshs: List[Variable]): Let = l match
         case x::Nil =>
-          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List()) //todo type
+          val freshA = Variable(new Identifier("tmp", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List())
           Let(freshA.toVal, insertLets(x), FunctionInvocation(g, tps, freshs++List(freshA)))
         case(x::xs) =>
-          val freshA = Variable(new Identifier("fresh", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List()) //todo type
+          val freshA = Variable(new Identifier("tmp", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List())
           Let(freshA.toVal, insertLets(x), chain(xs, freshs++List(freshA)))
       if (args.isEmpty) FunctionInvocation(g, tps, args)
       else chain(args, List())
@@ -555,49 +547,49 @@ trait Printer {
     case IntegerLiteral(_) => t
     case Variable(_, _, _) => t
     case LessThan(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), LessThan(freshA, freshB)))
     case GreaterThan(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), GreaterThan(freshA, freshB)))
     case LessEquals(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), LessEquals(freshA, freshB)))
     case GreaterEquals(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), GreaterEquals(freshA, freshB)))
     // todo types for a, b
     case Equals(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, a.getType(using ctx.opts.symbols.get), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, b.getType(using ctx.opts.symbols.get), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Equals(freshA, freshB)))
     case Not(a: Tree) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, BooleanType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
       Let(freshA.toVal, insertLets(a), Not(freshA))
     case Plus(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Plus(freshA, freshB)))
     case Minus(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Minus(freshA, freshB)))
     case Times(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Times(freshA, freshB)))
     case Division(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Division(freshA, freshB)))
     case Remainder(a, b) => ???
     case Modulo(a, b) =>
-      val freshA = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
-      val freshB = Variable(new Identifier("fresh", 0, 0).freshen, IntegerType(), List())
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Modulo(freshA, freshB)))
     case _ => t
 
@@ -632,10 +624,6 @@ trait Printer {
     case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
     case Remainder(l, r) => ???
     case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
-    case _ =>
-      println("other")
-      println(t)
-      t
 
 
   // existing INOX printing
