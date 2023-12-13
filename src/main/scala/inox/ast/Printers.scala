@@ -197,7 +197,7 @@ trait Printer {
     //3: right hand side is a ret term (or error term ?)
     val tra = Ret(f.id, ExprT(ret))
 
-    val R2 = Seq(Rule(tlb, trb)) ++ R1 ++ Seq(Rule(tlb, trb))
+    val R2 = Seq(Rule(tlb, trb)) ++ R1 ++ Seq(Rule(tla, tra))
     val S2 = Seq(UserFunDecl(f), FunDecl(0, FunType(f.params.map(_.tpe), f.returnType), f)) ++ S1 ++ Seq(RetDecl(f))
 
     (S2, R2, i1)
@@ -255,10 +255,30 @@ trait Printer {
 
       case Let(b, d, e) =>
         val convert_d = convert1(f, i, x, y, Seq(), Seq(), d)
-        val S1 = S ++ convert_d._1
-        val R1 = R ++ convert_d._2
+        val S1 = convert_d._1
+        val R1 = convert_d._2
         val j = convert_d._3
-        convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S1, R1, e)
+
+        val R1p = R1.map(elem => elem match {
+          case Rule(tl, tr, c) =>
+            tr match {
+              case Eval(id, f, arith_expr) if id == j =>
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(tl, Eval(id, f, t), c)
+              case _ => elem
+            }
+          })
+
+        val S1p = S1.map(elem => elem match
+          case FunDecl(id, t, fun) if id == j =>
+            FunDecl(id, FunType(t.args.take((x++y).size) ++ Seq(t.args.last), t.ret),fun)
+          case _ => elem
+        )
+
+        val S2 = S ++ S1p
+        val R2 = R ++ R1p
+
+        convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S2, R2, e)
 
       case FunctionInvocation(g, tps, args) =>
         // to receive the fun call res.
