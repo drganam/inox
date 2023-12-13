@@ -204,29 +204,27 @@ trait Printer {
   }
 
 
-  protected def evalExp(e: Tree)(using ctx: PrinterContext): ArithExpr = {
-    e match {
-      case BooleanLiteral(true) => TrueT()
-      case BooleanLiteral(false) => FalseT()
-      case IntegerLiteral(v) => IntValueT(v)
-      case Variable(id, t, _) => VarT(id, t)
-      case FunctionInvocation(g, tps, args) => CallT(g, args.map(evalExp(_)))
-      case And(List(a: Tree, b: Tree)) => AndT(evalExp(a), evalExp(b))
-      case Or(List(a: Tree, b: Tree)) => OrT(evalExp(a), evalExp(b))
-      case LessThan(a, b) => LtT(evalExp(a), evalExp(b))
-      case GreaterThan(l, r) => GtT(evalExp(l), evalExp(r))
-      case LessEquals(l, r) => LeT(evalExp(l), evalExp(r))
-      case GreaterEquals(l, r) => GeT(evalExp(l), evalExp(r))
-      case Equals(l, r) => EqT(evalExp(l), evalExp(r))
-      case Not(a: Tree) => NotT(evalExp(a))
-      case Plus(l, r) => AddT(evalExp(l), evalExp(r))
-      case Minus(l, r) => SubT(evalExp(l), evalExp(r))
-      case Times(l, r) => MulT(evalExp(l), evalExp(r))
-      case Division(l, r) => DivT(evalExp(l), evalExp(r))
-      case Remainder(l, r) => ???
-      case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
-    }
-  }
+  protected def evalExp(e: Tree)(using ctx: PrinterContext): ArithExpr = e match
+    case BooleanLiteral(true) => TrueT()
+    case BooleanLiteral(false) => FalseT()
+    case IntegerLiteral(v) => IntValueT(v)
+    case Variable(id, t, _) => VarT(id, t)
+    case FunctionInvocation(g, tps, args) => CallT(g, args.map(evalExp(_)))
+    case And(List(a: Tree, b: Tree)) => AndT(evalExp(a), evalExp(b))
+    case Or(List(a: Tree, b: Tree)) => OrT(evalExp(a), evalExp(b))
+    case LessThan(a, b) => LtT(evalExp(a), evalExp(b))
+    case GreaterThan(l, r) => GtT(evalExp(l), evalExp(r))
+    case LessEquals(l, r) => LeT(evalExp(l), evalExp(r))
+    case GreaterEquals(l, r) => GeT(evalExp(l), evalExp(r))
+    case Equals(l, r) => EqT(evalExp(l), evalExp(r))
+    case Not(a: Tree) => NotT(evalExp(a))
+    case Plus(l, r) => AddT(evalExp(l), evalExp(r))
+    case Minus(l, r) => SubT(evalExp(l), evalExp(r))
+    case Times(l, r) => MulT(evalExp(l), evalExp(r))
+    case Division(l, r) => DivT(evalExp(l), evalExp(r))
+    case Remainder(l, r) => ???
+    case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
+
 
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val xy = x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))
@@ -259,6 +257,7 @@ trait Printer {
         val R1 = convert_d._2
         val j = convert_d._3
 
+        // todo refactor this trimming because it's used for every block
         val R1p = R1.map(elem => elem match {
           case Rule(tl, tr, c) =>
             tr match {
@@ -281,9 +280,8 @@ trait Printer {
         convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S2, R2, e)
 
       case FunctionInvocation(g, tps, args) =>
-        // to receive the fun call res.
         val retTpe = ctx.opts.symbols.get.functions(g).returnType
-        val ret = VarT(new Identifier("fresh", 0, 0).freshen, retTpe)
+        val ret = VarT(new Identifier("fresh", 0, 0).freshen, retTpe) // to receive the fun call result
 
         val R2 = R ++ Seq(
           Rule(Eval(i, f, xy_terms), Eval(i+1, f, xy_terms ++ Seq(ExprT(CallT(g, args.map(e => evalExp(e))))))),
@@ -472,7 +470,7 @@ trait Printer {
       case Some(f) => " :|: " + printAPROVE(f)
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
 
-  // TODO print VAR list
+  // TODO finish
   protected def printAPROVE(r: Seq[Rule]): List[String] =
     val t = r.map(e => List(e.tr, e.tl)).flatten
     t.toList.map(ter => ter match
@@ -538,7 +536,39 @@ trait Printer {
       "true"
 
 
-  // preparation
+    // a && b
+    // if (a) b else false
+    // a || b
+    // if (a) true else b
+
+  protected def shortCircuit(t: Expr): Expr = t match
+    case And(List(a: Expr, b: Expr)) =>
+      IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
+    case Or(List(a: Expr, b: Expr)) =>
+      IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
+    case Let(b, d, e) =>
+      Let(b, shortCircuit(d), shortCircuit(e))
+    case IfExpr(e, ss, tt) =>
+      IfExpr(shortCircuit(e), shortCircuit(ss), shortCircuit(tt))
+    case FunctionInvocation(g, tps, args) =>
+      FunctionInvocation(g, tps, args.map(shortCircuit(_)))
+    case BooleanLiteral(_) => t
+    case IntegerLiteral(_) => t
+    case Variable(_, _, _) => t
+    case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
+    case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
+    case LessEquals(l, r) => LessEquals(shortCircuit(l), shortCircuit(r))
+    case GreaterEquals(l, r) => GreaterEquals(shortCircuit(l), shortCircuit(r))
+    case Equals(l, r) => Equals(shortCircuit(l), shortCircuit(r))
+    case Not(a: Tree) => Not(shortCircuit(a))
+    case Plus(l, r) => Plus(shortCircuit(l), shortCircuit(r))
+    case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
+    case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
+    case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
+    case Remainder(l, r) => ???
+    case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
+
+  // lets for fun. call args etc.
 
   protected def insertLets(t: Expr)(using ctx: PrinterContext): Expr = t match
     case And(List(a: Expr, b: Expr)) =>
@@ -612,39 +642,6 @@ trait Printer {
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Modulo(freshA, freshB)))
     case _ => t
-
-    // a && b
-    // if (a) b else false
-    // a || b
-    // if (a) true else b
-
-  protected def shortCircuit(t: Expr): Expr = t match
-    case And(List(a: Expr, b: Expr)) =>
-      IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
-    case Or(List(a: Expr, b: Expr)) =>
-      IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
-    case Let(b, d, e) =>
-      Let(b, shortCircuit(d), shortCircuit(e))
-    case IfExpr(e, ss, tt) =>
-      IfExpr(shortCircuit(e), shortCircuit(ss), shortCircuit(tt))
-    case FunctionInvocation(g, tps, args) =>
-      FunctionInvocation(g, tps, args.map(shortCircuit(_)))
-    case BooleanLiteral(_) => t
-    case IntegerLiteral(_) => t
-    case Variable(_, _, _) => t
-    case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
-    case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
-    case LessEquals(l, r) => LessEquals(shortCircuit(l), shortCircuit(r))
-    case GreaterEquals(l, r) => GreaterEquals(shortCircuit(l), shortCircuit(r))
-    case Equals(l, r) => Equals(shortCircuit(l), shortCircuit(r))
-    case Not(a: Tree) => Not(shortCircuit(a))
-    case Plus(l, r) => Plus(shortCircuit(l), shortCircuit(r))
-    case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
-    case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
-    case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
-    case Remainder(l, r) => ???
-    case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
-
 
   // existing INOX printing
 
