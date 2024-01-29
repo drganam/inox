@@ -154,6 +154,7 @@ trait Printer {
   case class NotT(a: ArithExpr) extends ArithExpr
   case class FalseT() extends ArithExpr
   case class TrueT() extends ArithExpr
+  case class ConsT(id: String, v: VarT) extends ArithExpr
 
 
   case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
@@ -172,8 +173,11 @@ trait Printer {
     val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2))++y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
 
-    println(insertLets(shortCircuit(Ss)))
-    val res = convert1(f, i, x, y, S, R, insertLets(shortCircuit(Ss)))
+    println("new")
+    val SsTransformed = insertLets(shortCircuit(Ss))
+    println(SsTransformed)
+    //val res = convert1(f, i, x, y, S, R, Ss)
+    val res = convert1(f, i, x, y, S, R, SsTransformed)
 
     val S1 = res._1
     val R1 = res._2
@@ -224,6 +228,7 @@ trait Printer {
     case Division(l, r) => DivT(evalExp(l), evalExp(r))
     case Remainder(l, r) => ???
     case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
+
 
 
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
@@ -293,8 +298,129 @@ trait Printer {
 
         (S2, R2, i+2)
 
+      // in tt -- the final case, there is no ADT id :(
+      case IfExpr(IsConstructor(e, id), ss, tt) =>
+        println("adt matching")
+
+        val j = i
+        // convert then branch:
+        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
+        val S2 = res2._1
+        val R2 = res2._2
+        val k =  res2._3
+        //convert else branch:
+        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt)
+        val S3 = res3._1
+        val R3 = res3._2
+        val n =  res3._3
+
+        // in R3
+        // replace fj+1 with fj
+        //val R3p = R3
+        val R3p = R3.map(elem => elem match {
+          case Rule(tl, tr, c) =>
+            tl match {
+              case Eval(id, f, arith_expr) if id == j+1 =>
+                Rule(Eval(j, f, arith_expr), tr, c)
+              case _ => elem
+            }
+        })
+        val S2p = S2
+        val S3p = S3
+
+
+        val R2p = R2.map(elem => elem match {
+          case Rule(tl, tr, c) =>
+            tl match {
+              case Eval(id, f, arith_expr) if id == k =>
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(Eval(n, f, t), tr, c)
+              case _ => elem
+            }
+            tr match {
+              case Eval(id, f, arith_expr) if id == k =>
+                val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+                Rule(tl, Eval(n, f, t), c)
+              case _ => elem
+            }
+        })
+
+        // val R3p = R3.map(elem => elem match {
+        //   case Rule(tl, tr, c) =>
+        //     tl match {
+        //       case Eval(id, f, arith_expr) if id == n =>
+        //         val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+        //         Rule(Eval(n, f, t), tr, c)
+        //       case _ => elem
+        //     }
+        //     tr match {
+        //       case Eval(id, f, arith_expr) if id == n =>
+        //         val t = arith_expr.take((x++y).size) ++ Seq(arith_expr.last)
+        //         Rule(tl, Eval(n, f, t), c)
+        //       case _ => elem
+        //     }
+        // })
+
+        // val S2p = S2.filterNot(elem => elem match
+        //   case FunDecl(id, t, _) => id == k
+        //   case _ => false
+        // )
+
+        // val S3p = S3.map(elem => elem match
+        //   case FunDecl(id, t, fun) if id == n =>
+        //     FunDecl(id, FunType(t.args.take((x++y).size) ++ Seq(t.args.last), t.ret),fun)
+        //   case _ => elem
+        // )
+
+        val Sp = S ++ Seq(
+                FunDecl(j+1, FunType(xy.map(_._2), f.returnType), f),
+                FunDecl(k, FunType(xy.map(_._2), f.returnType), f)) ++
+                S2p ++ S3p
+
+        // in xy terms
+        // find e, which is of base type
+        // replace it with id(fresh), which is of matched type
+
+        val search = evalExp(e)
+
+        val s = ctx.opts.symbols.get
+        val cons = s.lookupConstructor(id)
+        println("constructor of this id:")
+        println(cons)
+        println(cons.get.fields)
+        println(cons.get.getSort(using s).constructors)
+
+
+        val fresh = Variable(new Identifier("v", 0, 0).freshen, e.getType(using ctx.opts.symbols.get), List())
+
+        val xy_terms_case = xy_terms.map(elem => elem match
+          case ExprT(s) if s == search =>
+            ExprT(ConsT(id.name, VarT(fresh.id, fresh.tpe)))
+          case _ => elem
+        )
+
+        val constructors = cons.get.getSort(using s).constructors
+
+        val xy_terms_case_not = constructors.filterNot(_ == cons.get).map(c =>
+          val fresh = Variable(new Identifier("v", 0, 0).freshen, e.getType(using ctx.opts.symbols.get), List())
+          xy_terms.map(elem => elem match
+          case ExprT(s) if s == search =>
+            ExprT(ConsT(c.id.name, VarT(fresh.id, fresh.tpe)))
+          case _ => elem
+        ))
+
+        val Rp = R ++
+                Seq(Rule(Eval(j, f, xy_terms_case) , Eval(j+1, f, xy_terms_case))) ++ // if IsConstructor(e, id)
+                //Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms))) ++   // if IsNotConstructor(e, id)
+                xy_terms_case_not.map(t => Rule(Eval(j, f, t) , Eval(k, f, t))) ++
+                R2p ++ R3p
+
+        (Sp, Rp, n)
+
       case IfExpr(e, ss, tt) =>
         val j = i
+        val condition = evalExp(e)
+
         // convert then branch:
         val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
         val S2 = res2._1
@@ -355,7 +481,6 @@ trait Printer {
           case _ => elem
         )
 
-        val condition = evalExp(e)
 
         val Sp = S ++ Seq(
                 FunDecl(j+1, FunType(xy.map(_._2), f.returnType), f),
@@ -372,7 +497,7 @@ trait Printer {
       case els =>
         println("new case")
         println(els)
-        (S, R, i+1)
+        (S, R, i)
     }
 
   }
@@ -454,6 +579,8 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
+    case ConsT(name: String, v: VarT) =>
+      name + "(" + printCTRL(v) + ")"
 
   protected def printCTRL(t: Type): String = t match
     case BooleanType() => "Bool"
@@ -534,6 +661,8 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
+    case ConsT(name: String, v: VarT) =>
+      name + "(" + printCTRL(v) + ")"
 
 
     // a && b
@@ -541,32 +670,51 @@ trait Printer {
     // a || b
     // if (a) true else b
 
-  protected def shortCircuit(t: Expr): Expr = t match
-    case And(List(a: Expr, b: Expr)) =>
-      IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
-    case Or(List(a: Expr, b: Expr)) =>
-      IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
-    case Let(b, d, e) =>
-      Let(b, shortCircuit(d), shortCircuit(e))
-    case IfExpr(e, ss, tt) =>
-      IfExpr(shortCircuit(e), shortCircuit(ss), shortCircuit(tt))
-    case FunctionInvocation(g, tps, args) =>
-      FunctionInvocation(g, tps, args.map(shortCircuit(_)))
-    case BooleanLiteral(_) => t
-    case IntegerLiteral(_) => t
-    case Variable(_, _, _) => t
-    case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
-    case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
-    case LessEquals(l, r) => LessEquals(shortCircuit(l), shortCircuit(r))
-    case GreaterEquals(l, r) => GreaterEquals(shortCircuit(l), shortCircuit(r))
-    case Equals(l, r) => Equals(shortCircuit(l), shortCircuit(r))
-    case Not(a: Tree) => Not(shortCircuit(a))
-    case Plus(l, r) => Plus(shortCircuit(l), shortCircuit(r))
-    case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
-    case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
-    case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
-    case Remainder(l, r) => ???
-    case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
+  protected def shortCircuit(t: Expr): Expr =
+    println("ShortCircuit")
+    println(t)
+    println("done")
+    t match
+      case And(List(_)) =>
+        println("debug")
+        t
+      case And(List(a: IsConstructor, b: IsConstructor)) =>
+        println("speciall2")
+        t
+      case And(List(a: IsConstructor, b: Expr)) =>
+        println("speciall")
+        t
+      case And(List(a: Expr, b: Expr)) =>
+        println("old")
+        IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
+      case Or(List(a: Expr, b: Expr)) =>
+        IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
+      case Let(b, d, e) =>
+        Let(b, shortCircuit(d), shortCircuit(e))
+      case IfExpr(e, ss, tt) =>
+        IfExpr(shortCircuit(e), shortCircuit(ss), shortCircuit(tt))
+      case FunctionInvocation(g, tps, args) =>
+        FunctionInvocation(g, tps, args.map(shortCircuit(_)))
+      case BooleanLiteral(_) => t
+      case IntegerLiteral(_) => t
+      case Variable(_, _, _) => t
+      case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
+      case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
+      case LessEquals(l, r) => LessEquals(shortCircuit(l), shortCircuit(r))
+      case GreaterEquals(l, r) => GreaterEquals(shortCircuit(l), shortCircuit(r))
+      case Equals(l, r) => Equals(shortCircuit(l), shortCircuit(r))
+      case Not(a: Tree) => Not(shortCircuit(a))
+      case Plus(l, r) => Plus(shortCircuit(l), shortCircuit(r))
+      case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
+      case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
+      case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
+      case Remainder(l, r) => ???
+      case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
+      case Choose(res, pred) =>
+        println("choose")
+        Choose(res, shortCircuit(pred))
+      case IsConstructor(e, id) => IsConstructor(shortCircuit(e), id)
+      case ADTSelector(adt, selector) => ADTSelector(shortCircuit(adt), selector)
 
   // lets for fun. call args etc.
 
@@ -723,7 +871,11 @@ trait Printer {
     case GenericValue(tp, id) => p"$tp#$id"
     case Tuple(exprs) => p"($exprs)"
     case TupleSelect(t, i) => p"$t._$i"
-    case IsConstructor(e, id) => p"$e is $id"
+    case IsConstructor(e, id) =>
+      println("IsConstructor")
+      println(e)
+      println(id)
+      p"$e is $id"
     case ADTSelector(e, id) => p"$e.$id"
 
     case FunctionInvocation(id, tps, args) =>
