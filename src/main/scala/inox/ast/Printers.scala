@@ -175,9 +175,9 @@ trait Printer {
 
     println("new")
     val SsTransformed = insertLets(shortCircuit(Ss))
-    println(SsTransformed)
-    //val res = convert1(f, i, x, y, S, R, Ss)
-    val res = convert1(f, i, x, y, S, R, SsTransformed)
+    //println(SsTransformed)
+    val res = convert1(f, i, x, y, S, R, Ss)
+    //val res = convert1(f, i, x, y, S, R, SsTransformed)
 
     val S1 = res._1
     val R1 = res._2
@@ -257,7 +257,7 @@ trait Printer {
         (S1, R1, i+1)
 
       case Let(b, d, e) =>
-        val convert_d = convert1(f, i, x, y, Seq(), Seq(), d)
+        val convert_d = convert1(f, i, x, y, Seq(), Seq(), d, pathc)
         val S1 = convert_d._1
         val R1 = convert_d._2
         val j = convert_d._3
@@ -282,7 +282,7 @@ trait Printer {
         val S2 = S ++ S1p
         val R2 = R ++ R1p
 
-        convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S2, R2, e)
+        convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S2, R2, e, pathc)
 
       case FunctionInvocation(g, tps, args) =>
         val retTpe = ctx.opts.symbols.get.functions(g).returnType
@@ -303,12 +303,12 @@ trait Printer {
 
         val j = i
         // convert then branch:
-        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
+        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, pathc)
         val S2 = res2._1
         val R2 = res2._2
         val k =  res2._3
         //convert else branch:
-        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt)
+        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt, pathc)
         val S3 = res3._1
         val R3 = res3._2
         val n =  res3._3
@@ -421,12 +421,12 @@ trait Printer {
         val condition = evalExp(e)
 
         // convert then branch:
-        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss)
+        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, AndT(condition, pathc))
         val S2 = res2._1
         val R2 = res2._2
         val k =  res2._3
         //convert else branch:
-        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt)
+        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt, AndT(NotT(condition), pathc))
         val S3 = res3._1
         val R3 = res3._2
         val n =  res3._3
