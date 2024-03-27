@@ -176,8 +176,8 @@ trait Printer {
     println("new")
     val SsTransformed = insertLets(shortCircuit(Ss))
     //println(SsTransformed)
-    val res = convert1(f, i, x, y, S, R, Ss)
-    //val res = convert1(f, i, x, y, S, R, SsTransformed)
+    //val res = convert1(f, i, x, y, S, R, Ss)
+    val res = convert1(f, i, x, y, S, R, SsTransformed)
 
     val S1 = res._1
     val R1 = res._2
@@ -255,6 +255,11 @@ trait Printer {
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
+
+      case Assume(pred, body) =>
+        println("assume")
+        println(pred)
+        convert1(f, i, x, y, S, R, body, if (pathc == TrueT()) evalExp(pred) else AndT(evalExp(pred), pathc))
 
       case Let(b, d, e) =>
         val convert_d = convert1(f, i, x, y, Seq(), Seq(), d, pathc)
@@ -419,14 +424,17 @@ trait Printer {
       case IfExpr(e, ss, tt) =>
         val j = i
         val condition = evalExp(e)
+        println("here")
+        println(pathc)
+        println(pathc == TrueT())
 
         // convert then branch:
-        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, AndT(condition, pathc))
+        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, if (pathc == TrueT()) condition else AndT(condition, pathc))
         val S2 = res2._1
         val R2 = res2._2
         val k =  res2._3
         //convert else branch:
-        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt, AndT(NotT(condition), pathc))
+        val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt, if (pathc == TrueT()) NotT(condition) else AndT(NotT(condition), pathc))
         val S3 = res3._1
         val R3 = res3._2
         val n =  res3._3
@@ -487,8 +495,8 @@ trait Printer {
                 S2p ++ S3p
 
         val Rp = R ++
-                Seq(Rule(Eval(j, f, xy_terms) , Eval(j+1, f, xy_terms), AndT(condition, pathc))) ++
-                Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), AndT(NotT(condition), pathc))) ++
+                Seq(Rule(Eval(j, f, xy_terms) , Eval(j+1, f, xy_terms), if (pathc == TrueT()) condition else AndT(condition, pathc))) ++
+                Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms), if (pathc == TrueT()) NotT(condition) else AndT(NotT(condition), pathc))) ++
                 R2p ++ R3p
 
         (Sp, Rp, n)
@@ -526,7 +534,9 @@ trait Printer {
       " => " + printCTRL(fd.returnType)
 
   protected def printCTRL(r: Rule): String =
-    val cString = " [" + printCTRL(r.c) + "] "
+    val cString = r.c match
+      case TrueT() => ""
+      case f => " [" + printCTRL(f) + "] "
     printCTRL(r.tl) + " -> " + printCTRL(r.tr) + cString + ";"
 
   protected def printCTRL(t: Term): String = t match
@@ -589,7 +599,9 @@ trait Printer {
     "(RULES\n" + ctrs._2.map(printAPROVE(_)).mkString("\n") + "\n)"
 
   protected def printAPROVE(r: Rule): String =
-    val cString = " :|: " + printAPROVE(r.c)
+    val cString = r.c match
+      case TrueT() => ""
+      case f => " :|: " + printAPROVE(f)
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
 
   // TODO finish
@@ -660,6 +672,89 @@ trait Printer {
       name + "(" + printCTRL(v) + ")"
 
 
+  protected def printCORA(ctrs: (Seq[Signature], Seq[Rule])): String =
+    "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
+    "SIGNATURE " + ctrs._1.map(printCORA(_)).mkString(" ;\n") + " ;\n" +
+    "RULES\n" + ctrs._2.map(printCORA(_)).mkString("\n") +
+    "\nQUERY termination"
+
+  // todo: allow print without types as well
+  protected def printCORA(s: Signature): String = s match
+    case FunDecl(id, t, fd) =>
+      fd.id.uniqueName + "_" + id + " : " +
+      t.args.map(printCORA(_)).mkString(" * ") +
+      " => " + printCORA(fd.returnType)
+    case UserFunDecl(fd) =>
+      fd.id.uniqueName + " : " +
+      fd.params.map(_.tpe).map(printCORA(_)).mkString(" * ") +
+      " => " + printCORA(fd.returnType)
+    case RetDecl(fd) =>
+      "ret_" + fd.id.uniqueName + " : " +
+      printCORA(fd.returnType) +
+      " => " + printCORA(fd.returnType)
+
+  protected def printCORA(r: Rule): String =
+    val cString = r.c match
+      case TrueT() => ""
+      case f => " | " + printCORA(f)
+    printCORA(r.tl) + " -> " + printCORA(r.tr) + cString + ";"
+
+  protected def printCORA(t: Term): String = t match
+    case Ret(id, ret) =>
+      "ret_" + id.uniqueName + "(" + printCORA(ret) + ")"
+    case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
+      fd.id.uniqueName + "_" + id + "(" + t.map(printCORA(_)).mkString(", ") + ")"
+    case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
+      id.uniqueName + "(" + arith_expr.map(printCORA(_)).mkString(", ") + ")"
+    case ExprT(arith_expr) =>
+      printCORA(arith_expr)
+
+  protected def printCORA(e: ArithExpr): String = e match
+    case IntValueT(i: BigInt) =>
+      i.toString
+    case VarT(id: Identifier, t: Type) =>
+      id.uniqueName
+    case AddT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " + " + printCORA(b)
+    case SubT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " - " + printCORA(b)
+    case MulT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " * " + printCORA(b)
+    case DivT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " / " + printCORA(b)
+    case ModT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " mod " + printCORA(b)
+    case AndT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " /\\ " + printCORA(b)
+    case OrT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " \\/ " + printCORA(b)
+    case GtT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " > " + printCORA(b)
+    case LtT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " < " + printCORA(b)
+    case LeT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " <= " + printCORA(b)
+    case GeT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " >= " + printCORA(b)
+    case EqT(a: ArithExpr, b: ArithExpr) =>
+      printCORA(a) + " = " + printCORA(b)
+    case NotT(a: ArithExpr) =>
+      "not(" + printCORA(a) + ")"
+    case CallT(id: Identifier, args: Seq[ArithExpr]) =>
+      id.uniqueName + "(" + args.map(printCORA(_)).mkString(", ") + ")"
+    case FalseT() =>
+      "false"
+    case TrueT() =>
+      "true"
+    case ConsT(name: String, v: VarT) =>
+      name + "(" + printCORA(v) + ")"
+
+  protected def printCORA(t: Type): String = t match
+    case BooleanType() => "Bool"
+    case IntegerType() => "Int"
+    case _ => t.toString
+
+
     // a && b
     // if (a) b else false
     // a || b
@@ -710,6 +805,7 @@ trait Printer {
         Choose(res, shortCircuit(pred))
       case IsConstructor(e, id) => IsConstructor(shortCircuit(e), id)
       case ADTSelector(adt, selector) => ADTSelector(shortCircuit(adt), selector)
+      case Assume(pred, body) => Assume(shortCircuit(pred), shortCircuit(body))
 
   // lets for fun. call args etc.
 
