@@ -176,8 +176,8 @@ trait Printer {
     println("new")
     val SsTransformed = insertLets(shortCircuit(Ss))
     //println(SsTransformed)
-    //val res = convert1(f, i, x, y, S, R, Ss)
-    val res = convert1(f, i, x, y, S, R, SsTransformed)
+    val res = convert1(f, i, x, y, S, R, Ss)
+    //val res = convert1(f, i, x, y, S, R, SsTransformed)
 
     val S1 = res._1
     val R1 = res._2
@@ -255,6 +255,7 @@ trait Printer {
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
+
 
       case Assume(pred, body) =>
         println("assume")
@@ -500,6 +501,11 @@ trait Printer {
                 R2p ++ R3p
 
         (Sp, Rp, n)
+
+      case Choose(res, pred) =>
+        val fresh = Variable(new Identifier("v", 0, 0).freshen, res.getType(using ctx.opts.symbols.get), List())
+        convert1(f, i, x, y, S, R, fresh, if (pathc == TrueT()) evalExp(pred) else AndT(evalExp(pred), pathc))
+
 
       case els =>
         println("new case")
