@@ -154,7 +154,7 @@ trait Printer {
   case class NotT(a: ArithExpr) extends ArithExpr
   case class FalseT() extends ArithExpr
   case class TrueT() extends ArithExpr
-  case class ConsT(id: String, v: List[VarT]) extends ArithExpr
+  case class ConsT(id: Identifier, v: List[VarT]) extends ArithExpr
 
 
   case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
@@ -170,7 +170,7 @@ trait Printer {
   // conversion
 
   protected def convert(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Expr)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
-    val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2))++y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
+    val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
 
     println("new")
@@ -229,6 +229,8 @@ trait Printer {
     case Remainder(l, r) => ???
     case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
     case ADTSelector(adt, selector) => VarT(selector, UnitType())
+
+
 
 
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
@@ -313,15 +315,40 @@ trait Printer {
       case IfExpr(IsConstructor(e, id), ss, tt) =>
         println("adt matching")
 
+        val s = ctx.opts.symbols.get
+        val cons = s.lookupConstructor(id)
+        println(s.lookupConstructor(id).get.fields)
+        val constructors = cons.get.getSort(using s).constructors
+
+
+        val search = evalExp(e)
+
+        // in xy terms
+        // find e, which is of base type
+        // replace it with id(fields), which is of matched type
+        val xy_terms_case = xy_terms.map(elem => elem match
+          case ExprT(s) if s == search =>
+            ExprT(ConsT(id, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
+          case _ => elem
+        )
+
+        println(xy_terms)
+
+        val nnn = xy_terms_case.map(elem =>
+          elem match
+            case ExprT(VarT(a, b)) => (a, b)
+            case ExprT(ConsT(id,fields)) => (id, UnitType())
+        )
 
         val j = i
         // convert then branch:
+        // todo: R2 should have A(a1, a2) in xy_terms_case and not just generic scrut$2
         // todo: in x++y, replace scrut$2 with e.g. A(v$41)
-        val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, pathc)
+        val res2 = convert1(f, j+1, nnn, Seq(), Seq(), Seq(), ss, pathc)
         val S2 = res2._1
         val R2 = res2._2
         val k =  res2._3
-        //convert else branch:
+        // convert else branch:
         val res3 = convert1(f, k, x++y, Seq(), Seq(), Seq(), tt, pathc)
         val S3 = res3._1
         val R3 = res3._2
@@ -363,34 +390,20 @@ trait Printer {
                 FunDecl(k, FunType(xy.map(_._2), f.returnType), f)) ++
                 S2p ++ S3p
 
-        // in xy terms
-        // find e, which is of base type
-        // replace it with id(fresh), which is of matched type
 
-        val search = evalExp(e)
 
-        val s = ctx.opts.symbols.get
-        val cons = s.lookupConstructor(id)
-        val constructors = cons.get.getSort(using s).constructors
 
-        val xy_terms_case = xy_terms.map(elem => elem match
-          case ExprT(s) if s == search =>
-            ExprT(ConsT(id.name, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
-          case _ => elem
-        )
 
         val xy_terms_case_not = constructors.filterNot(_ == cons.get).map(c =>
           xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
-            ExprT(ConsT(c.id.name, c.fields.map(field => VarT(field.id, field.tpe)).toList))
+            ExprT(ConsT(c.id, c.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         ))
 
         val Rp = R ++
-                // todo: this rule should have A(a1, a2) in xy_terms_case and not just generic scrut$2
                 Seq(Rule(Eval(j, f, xy_terms_case) , Eval(j+1, f, xy_terms_case), pathc)) ++ // if IsConstructor(e, id)
-                //Seq(Rule(Eval(j, f, xy_terms) , Eval(k, f, xy_terms))) ++   // if IsNotConstructor(e, id)
-                xy_terms_case_not.map(t => Rule(Eval(j, f, t) , Eval(k, f, t), pathc)) ++
+                xy_terms_case_not.map(t => Rule(Eval(j, f, t) , Eval(k, f, t), pathc)) ++ // if IsNotConstructor(e, id)
                 R2p ++ R3p
         (Sp, Rp, n)
 
@@ -489,7 +502,7 @@ trait Printer {
 
   // printers for CTRL and APROVE
 
-  protected def printCTRL(ctrs: (Seq[Signature], Seq[Rule])): String =
+  protected def printCTRL(ctrs: (Seq[Signature], Seq[Rule]))(using ctx: PrinterContext): String =
     "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
     "SIGNATURE " + ctrs._1.map(printCTRL(_)).mkString(" ;\n") + " ;\n" +
     "RULES\n" + ctrs._2.map(printCTRL(_)).mkString("\n") +
@@ -510,13 +523,13 @@ trait Printer {
       printCTRL(fd.returnType) +
       " => " + printCTRL(fd.returnType)
 
-  protected def printCTRL(r: Rule): String =
+  protected def printCTRL(r: Rule)(using ctx: PrinterContext): String =
     val cString = r.c match
       case TrueT() => ""
       case f => " [" + printCTRL(f) + "] "
     printCTRL(r.tl) + " -> " + printCTRL(r.tr) + cString + ";"
 
-  protected def printCTRL(t: Term): String = t match
+  protected def printCTRL(t: Term)(using ctx: PrinterContext): String = t match
     case Ret(id, ret) =>
       "ret_" + id.uniqueName + "(" + printCTRL(ret) + ")"
     case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
@@ -526,11 +539,13 @@ trait Printer {
     case ExprT(arith_expr) =>
       printCTRL(arith_expr)
 
-  protected def printCTRL(e: ArithExpr): String = e match
+  protected def printCTRL(e: ArithExpr)(using ctx: PrinterContext): String = e match
     case IntValueT(i: BigInt) =>
       i.toString
     case VarT(id: Identifier, t: Type) =>
-      id.uniqueName
+      ctx.opts.symbols.get.lookupConstructor(id) match
+        case None => id.uniqueName
+        case Some(c) => id.uniqueName + "(" + c.fields.map(field => VarT(field.id, field.tpe)).map(printCTRL(_)).mkString(", ") + ")"
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printCTRL(a) + " + " + printCTRL(b)
     case SubT(a: ArithExpr, b: ArithExpr) =>
@@ -563,26 +578,30 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(name: String, v: List[VarT]) =>
-      name + "(" + v.map(printCTRL(_)).mkString(", ") + ")"
+    case ConsT(id: Identifier, v: List[VarT]) =>
+      val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
+      val fields = f.map(field => VarT(field.id, field.tpe))
+      println("fields")
+      println(fields.map(printCTRL(_)).mkString(", "))
+      id.uniqueName + "(" + fields.map(printCTRL(_)).mkString(", ") + ")"
 
   protected def printCTRL(t: Type): String = t match
     case BooleanType() => "Bool"
     case IntegerType() => "Int"
     case _ => t.toString
 
-  protected def printAPROVE(ctrs: (Seq[Signature], Seq[Rule])): String =
+  protected def printAPROVE(ctrs: (Seq[Signature], Seq[Rule]))(using ctx: PrinterContext): String =
     "(VAR " + printAPROVE(ctrs._2).distinct.mkString(" ") + ")\n" +
     "(RULES\n" + ctrs._2.map(printAPROVE(_)).mkString("\n") + "\n)"
 
-  protected def printAPROVE(r: Rule): String =
+  protected def printAPROVE(r: Rule)(using ctx: PrinterContext): String =
     val cString = r.c match
       case TrueT() => ""
       case f => " :|: " + printAPROVE(f)
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
 
   // TODO finish
-  protected def printAPROVE(r: Seq[Rule]): List[String] =
+  protected def printAPROVE(r: Seq[Rule])(using ctx: PrinterContext): List[String] =
     val t = r.map(e => List(e.tr, e.tl)).flatten
     t.toList.map(ter => ter match
       case Ret(id, ret) =>
@@ -598,7 +617,7 @@ trait Printer {
         List() //printAPROVE(arith_expr)
     ).flatten
 
-  protected def printAPROVE(t: Term): String = t match
+  protected def printAPROVE(t: Term)(using ctx: PrinterContext): String = t match
     case Ret(id, ret) =>
       "ret_" + id.name + "(" + printAPROVE(ret) + ")"
     case Eval(id: Int, fd: FunDef, t: Seq[Term]) =>
@@ -608,11 +627,13 @@ trait Printer {
     case ExprT(arith_expr) =>
       printAPROVE(arith_expr)
 
-  protected def printAPROVE(e: ArithExpr): String = e match
+  protected def printAPROVE(e: ArithExpr)(using ctx: PrinterContext): String = e match
     case IntValueT(i: BigInt) =>
       i.toString
     case VarT(id: Identifier, t: Type) =>
-      id.uniqueName
+      ctx.opts.symbols.get.lookupConstructor(id) match
+        case None => id.uniqueName
+        case Some(c) => id.uniqueName + "(" + c.fields.map(field => VarT(field.id, field.tpe)).map(printCTRL(_)).mkString(", ") + ")"
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " + " + printAPROVE(b)
     case SubT(a: ArithExpr, b: ArithExpr) =>
@@ -645,8 +666,12 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(name: String, v: List[VarT]) =>
-      name + "(" + v.map(printAPROVE(_)).mkString(", ") + ")"
+    case ConsT(id: Identifier, v: List[VarT]) =>
+      val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
+      val fields = f.map(field => VarT(field.id, field.tpe))
+      println("fields")
+      println(fields.map(printCTRL(_)).mkString(", "))
+      id.uniqueName + "(" + fields.map(printCTRL(_)).mkString(", ") + ")"
 
 
   protected def printCORA(ctrs: (Seq[Signature], Seq[Rule])): String =
@@ -723,8 +748,8 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(name: String, v: List[VarT]) =>
-      name + "(" + v.map(printCORA(_)).mkString(", ") + ")"
+    case ConsT(id: Identifier, v: List[VarT]) =>
+      id.uniqueName + "(" + v.map(printCORA(_)).mkString(", ") + ")"
 
   protected def printCORA(t: Type): String = t match
     case BooleanType() => "Bool"
@@ -1155,6 +1180,7 @@ trait Printer {
 
         //fd, 0 , f U (), (), (), ()
         val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => (p.id, p.tpe)), Seq(), Seq(), fd.fullBody)
+
         val ctrl = printCTRL((res._1, res._2))
 
         val aprove = printAPROVE((res._1, res._2))
