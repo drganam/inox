@@ -373,23 +373,18 @@ trait Printer {
         val cons = s.lookupConstructor(id)
         val constructors = cons.get.getSort(using s).constructors
 
-        val fresh_fields = cons.get.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
-
         val xy_terms_case = xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
-            ExprT(ConsT(id.name, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
+            ExprT(ConsT(id.name, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         )
 
         val xy_terms_case_not = constructors.filterNot(_ == cons.get).map(c =>
-          val fresh_fields = c.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
-
           xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
-            ExprT(ConsT(c.id.name, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
+            ExprT(ConsT(c.id.name, c.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         ))
-
 
         val Rp = R ++
                 // todo: this rule should have A(a1, a2) in xy_terms_case and not just generic scrut$2
