@@ -228,7 +228,7 @@ trait Printer {
     case Division(l, r) => DivT(evalExp(l), evalExp(r))
     case Remainder(l, r) => ???
     case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
-
+    case ADTSelector(adt, selector) => VarT(selector, UnitType())
 
 
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
@@ -255,7 +255,13 @@ trait Printer {
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
-
+      case ADTSelector(adt, selector) =>
+        val tl = Eval(i, f, xy_terms)
+        val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
+        val R1 = R ++ Seq(Rule(tl, tr, pathc))
+        // todo update Seq(UnitType())
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(UnitType()), f.returnType), f))
+        (S1, R1, i+1)
 
       case Assume(pred, body) =>
         println("assume")
