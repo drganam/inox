@@ -649,7 +649,7 @@ trait Printer {
     case DivT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " / " + printAPROVE(b)
     case ModT(a: ArithExpr, b: ArithExpr) =>
-      printAPROVE(a) + " mod " + printAPROVE(b)
+      printAPROVE(a) + " % " + printAPROVE(b)
     case AndT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " /\\ " + printAPROVE(b)
     case OrT(a: ArithExpr, b: ArithExpr) =>
@@ -806,14 +806,15 @@ trait Printer {
       case Minus(l, r) => Minus(shortCircuit(l), shortCircuit(r))
       case Times(l, r) => Times(shortCircuit(l), shortCircuit(r))
       case Division(l, r) => Division(shortCircuit(l), shortCircuit(r))
-      case Remainder(l, r) => ???
+      case Remainder(l, r) => Modulo(shortCircuit(l), shortCircuit(r)) // ???
       case Modulo(l, r) => Modulo(shortCircuit(l), shortCircuit(r))
       case Choose(res, pred) =>
         println("choose")
         Choose(res, shortCircuit(pred))
       case IsConstructor(e, id) => IsConstructor(shortCircuit(e), id)
       case ADTSelector(adt, selector) => ADTSelector(shortCircuit(adt), selector)
-      case Assume(pred, body) => Assume(shortCircuit(pred), shortCircuit(body))
+      case Assume(pred, body) => Assume(pred, shortCircuit(body))
+      case ADT(id, tps, args) => ADT(id, tps, args.map(shortCircuit))
 
   // lets for fun. call args etc.
 
@@ -883,11 +884,16 @@ trait Printer {
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Division(freshA, freshB)))
-    case Remainder(a, b) => ???
+    case Remainder(a, b) =>
+      val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Remainder(freshA, freshB)))
     case Modulo(a, b) =>
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Modulo(freshA, freshB)))
+    case Assume(pred, body) => Assume(pred, insertLets(body))
+
     case _ => t
 
   // existing INOX printing
