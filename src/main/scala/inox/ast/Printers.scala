@@ -154,7 +154,7 @@ trait Printer {
   case class NotT(a: ArithExpr) extends ArithExpr
   case class FalseT() extends ArithExpr
   case class TrueT() extends ArithExpr
-  case class ConsT(id: Identifier, v: List[VarT]) extends ArithExpr
+  case class ConsT(id: Identifier, v: List[ArithExpr]) extends ArithExpr
 
 
   case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
@@ -229,8 +229,7 @@ trait Printer {
     case Remainder(l, r) => ???
     case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
     case ADTSelector(adt, selector) => VarT(selector, UnitType())
-
-
+    case ADT(id, tps, args) => ConsT(id, args.map(field => evalExp(field)).toList)
 
 
   protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
@@ -258,6 +257,13 @@ trait Printer {
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
       case ADTSelector(adt, selector) =>
+        val tl = Eval(i, f, xy_terms)
+        val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
+        val R1 = R ++ Seq(Rule(tl, tr, pathc))
+        // todo update Seq(UnitType())
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(UnitType()), f.returnType), f))
+        (S1, R1, i+1)
+      case ADT(id, _, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
@@ -578,7 +584,7 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(id: Identifier, v: List[VarT]) =>
+    case ConsT(id: Identifier, v: List[ArithExpr]) =>
       val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
       val fields = f.map(field => VarT(field.id, field.tpe))
       println("fields")
@@ -666,7 +672,7 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(id: Identifier, v: List[VarT]) =>
+    case ConsT(id: Identifier, v: List[ArithExpr]) =>
       val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
       val fields = f.map(field => VarT(field.id, field.tpe))
       println("fields")
@@ -748,7 +754,7 @@ trait Printer {
       "false"
     case TrueT() =>
       "true"
-    case ConsT(id: Identifier, v: List[VarT]) =>
+    case ConsT(id: Identifier, v: List[ArithExpr]) =>
       id.uniqueName + "(" + v.map(printCORA(_)).mkString(", ") + ")"
 
   protected def printCORA(t: Type): String = t match
