@@ -497,6 +497,7 @@ trait Printer {
         val fresh = Variable(new Identifier("v", 0, 0).freshen, res.getType(using ctx.opts.symbols.get), List())
         convert1(f, i, x, y, S, R, fresh, if (pathc == TrueT()) evalExp(pred) else AndT(evalExp(pred), pathc))
 
+
       case els =>
         println("new case")
         println(els)
@@ -832,18 +833,71 @@ trait Printer {
     case IfExpr(e, ss, tt) =>
       IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
     case FunctionInvocation(g, tps, args) =>
-      def chain(l: Seq[Expr], freshs: List[Variable]): Let = l match
+      def chain(l: Seq[Expr], freshs: List[Variable]): Expr = l match
+        case(Variable(id, t, l) :: Nil) => FunctionInvocation(g, tps, freshs++List(Variable(id, t, l)))
         case x::Nil =>
           val freshA = Variable(new Identifier("tmp", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List())
           Let(freshA.toVal, insertLets(x), FunctionInvocation(g, tps, freshs++List(freshA)))
+        case(Variable(id, t, l) :: xs) => chain(xs, freshs++List(Variable(id, t, l)))
         case(x::xs) =>
           val freshA = Variable(new Identifier("tmp", 0, 0).freshen, x.getType(using ctx.opts.symbols.get), List())
           Let(freshA.toVal, insertLets(x), chain(xs, freshs++List(freshA)))
       if (args.isEmpty) FunctionInvocation(g, tps, args)
       else chain(args, List())
+    // todo refactor
     case BooleanLiteral(_) => t
     case IntegerLiteral(_) => t
     case Variable(_, _, _) => t
+    case LessThan(a: Variable, b: Variable) => t
+    case LessThan(a: IntegerLiteral, b: IntegerLiteral) => t
+    case LessThan(a: IntegerLiteral, b: Variable) => t
+    case LessThan(a: Variable, b: IntegerLiteral) => t
+    case GreaterThan(a: Variable, b: Variable) => t
+    case GreaterThan(a: IntegerLiteral, b: IntegerLiteral) => t
+    case GreaterThan(a: IntegerLiteral, b: Variable) => t
+    case GreaterThan(a: Variable, b: IntegerLiteral) => t
+    case LessEquals(a: Variable, b: Variable) => t
+    case LessEquals(a: IntegerLiteral, b: IntegerLiteral) => t
+    case LessEquals(a: IntegerLiteral, b: Variable) => t
+    case LessEquals(a: Variable, b: IntegerLiteral) => t
+    case GreaterEquals(a: Variable, b: Variable) => t
+    case GreaterEquals(a: IntegerLiteral, b: IntegerLiteral) => t
+    case GreaterEquals(a: Variable, b: BooleanLiteral) => t
+    case GreaterEquals(a: IntegerLiteral, b: Variable) => t
+    case GreaterEquals(a: Variable, b: IntegerLiteral) => t
+    case Equals(a: Variable, b: Variable) => t
+    case Equals(a: BooleanLiteral, b: BooleanLiteral) => t
+    case Equals(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Equals(a: IntegerLiteral, b: Variable) => t
+    case Equals(a: Variable, b: IntegerLiteral) => t
+    case Equals(a: BooleanLiteral, b: Variable) => t
+    case Equals(a: Variable, b: BooleanLiteral) => t
+    case Not(a: Variable) => t
+    case Not(a: BooleanLiteral) => t
+    case Plus(a: Variable, b: Variable) => t
+    case Plus(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Plus(a: IntegerLiteral, b: Variable) => t
+    case Plus(a: Variable, b: IntegerLiteral) => t
+    case Minus(a: Variable, b: Variable) => t
+    case Minus(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Minus(a: IntegerLiteral, b: Variable) => t
+    case Minus(a: Variable, b: IntegerLiteral) => t
+    case Times(a: Variable, b: Variable) => t
+    case Times(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Times(a: IntegerLiteral, b: Variable) => t
+    case Times(a: Variable, b: IntegerLiteral) => t
+    case Division(a: Variable, b: Variable) => t
+    case Division(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Division(a: IntegerLiteral, b: Variable) => t
+    case Division(a: Variable, b: IntegerLiteral) => t
+    case Remainder(a: Variable, b: Variable) => t
+    case Remainder(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Remainder(a: IntegerLiteral, b: Variable) => t
+    case Remainder(a: Variable, b: IntegerLiteral) => t
+    case Modulo(a: Variable, b: Variable) => t
+    case Modulo(a: IntegerLiteral, b: IntegerLiteral) => t
+    case Modulo(a: IntegerLiteral, b: Variable) => t
+    case Modulo(a: Variable, b: IntegerLiteral) => t
     case LessThan(a, b) =>
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
