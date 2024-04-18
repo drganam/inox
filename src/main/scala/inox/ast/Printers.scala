@@ -494,9 +494,9 @@ trait Printer {
         (Sp, Rp, n)
 
       case Choose(res, pred) =>
-        val fresh = Variable(new Identifier("v", 0, 0).freshen, res.getType(using ctx.opts.symbols.get), List())
-        convert1(f, i, x, y, S, R, fresh, if (pathc == TrueT()) evalExp(pred) else AndT(evalExp(pred), pathc))
-
+        //val fresh = Variable(new Identifier("v", 0, 0).freshen, res.getType(using ctx.opts.symbols.get), List())
+        //convert1(f, i, x, y, S, R, fresh, if (pathc == TrueT()) evalExp(pred) else AndT(evalExp(pred), pathc))
+        (S, R, i) // noop
 
       case els =>
         println("new case")
@@ -784,7 +784,6 @@ trait Printer {
         println("speciall")
         t
       case And(List(a: Expr, b: Expr)) =>
-        println("old")
         IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
       case Or(List(a: Expr, b: Expr)) =>
         IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
@@ -816,6 +815,10 @@ trait Printer {
       case ADTSelector(adt, selector) => ADTSelector(shortCircuit(adt), selector)
       case Assume(pred, body) => Assume(pred, shortCircuit(body))
       case ADT(id, tps, args) => ADT(id, tps, args.map(shortCircuit))
+      case _ =>
+        println("default")
+        println(t)
+        t
 
   // lets for fun. call args etc.
 
