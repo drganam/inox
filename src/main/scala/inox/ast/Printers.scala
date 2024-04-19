@@ -174,6 +174,7 @@ trait Printer {
     val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
 
     println("new")
+
     val SsTransformed = insertLets(shortCircuit(Ss))
     //println(SsTransformed)
     //val res = convert1(f, i, x, y, S, R, Ss)
@@ -774,18 +775,9 @@ trait Printer {
     println(t)
     println("done")
     t match
-      case And(List(_)) =>
-        println("debug")
-        t
-      case And(List(a: IsConstructor, b: IsConstructor)) =>
-        println("speciall2")
-        t
-      case And(List(a: IsConstructor, b: Expr)) =>
-        println("speciall")
-        t
-      case And(List(a: Expr, b: Expr)) =>
+      case And(Seq(a: Expr, b: Expr)) =>
         IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
-      case Or(List(a: Expr, b: Expr)) =>
+      case Or(Seq(a: Expr, b: Expr)) =>
         IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
       case Let(b, d, e) =>
         Let(b, shortCircuit(d), shortCircuit(e))
@@ -823,16 +815,19 @@ trait Printer {
   // lets for fun. call args etc.
 
   protected def insertLets(t: Expr)(using ctx: PrinterContext): Expr = t match
-    case And(List(a: Expr, b: Expr)) =>
+    case And(Seq(a: Expr, b: Expr)) =>
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
-      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), And(List(freshA, freshB))))
-    case Or(List(a: Expr, b: Expr)) =>
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), And(Seq(freshA, freshB))))
+    case Or(Seq(a: Expr, b: Expr)) =>
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
-      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Or(List(freshA, freshB))))
+      Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Or(Seq(freshA, freshB))))
     case Let(b, d, e) =>
       Let(b, insertLets(d), insertLets(e))
+    case IfExpr(e @ IfExpr(_, _, _), ss, tt) =>
+      val fresh = Variable(new Identifier("tmp", 0, 0).freshen, e.getType(using ctx.opts.symbols.get), List())
+      Let(fresh.toVal, insertLets(e), IfExpr(fresh, insertLets(ss), insertLets(tt)))
     case IfExpr(e, ss, tt) =>
       IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
     case FunctionInvocation(g, tps, args) =>
@@ -950,7 +945,7 @@ trait Printer {
       val freshB = Variable(new Identifier("tmp", 0, 0).freshen, IntegerType(), List())
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Modulo(freshA, freshB)))
     case Assume(pred, body) => Assume(pred, insertLets(body))
-
+    case IsConstructor(e, id) => IsConstructor(insertLets(e), id)
     case _ => t
 
   // existing INOX printing
