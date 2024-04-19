@@ -156,6 +156,27 @@ trait Printer {
   case class TrueT() extends ArithExpr
   case class ConsT(id: Identifier, v: List[ArithExpr]) extends ArithExpr
 
+  protected def typeOfExpression(e: ArithExpr)(using ctx: PrinterContext): Type = e match
+    case IntValueT(i: BigInt) => IntegerType()
+    case VarT(id: Identifier, t: Type) => t
+    case CallT(id: Identifier, args: Seq[ArithExpr]) => ctx.opts.symbols.get.functions(id).returnType
+    case AddT(a: ArithExpr, b: ArithExpr) => IntegerType()
+    case SubT(a: ArithExpr, b: ArithExpr) => IntegerType()
+    case MulT(a: ArithExpr, b: ArithExpr) => IntegerType()
+    case DivT(a: ArithExpr, b: ArithExpr) => IntegerType()
+    case ModT(a: ArithExpr, b: ArithExpr) => IntegerType()
+    case AndT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case OrT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case GtT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case LtT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case LeT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case GeT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case EqT(a: ArithExpr, b: ArithExpr) => BooleanType()
+    case NotT(a: ArithExpr) => BooleanType()
+    case FalseT() => BooleanType()
+    case TrueT() => BooleanType()
+    case ConsT(id: Identifier, v: List[ArithExpr]) => ADTType(id, v.map(typeOfExpression))
+
 
   case class Eval(id: Int, fd: FunDef, t: Seq[Term]) extends Term
   case class Ret(id: Identifier, ret: Term) extends Term
@@ -169,9 +190,9 @@ trait Printer {
 
   // conversion
 
-  protected def convert(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Expr)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
-    val tlb = FunOrig(f.id, x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))) // todo f's args instead of xy
-    val trb = Eval(i, f, (x++y).map(e => ExprT(VarT(e._1, e._2))))
+  protected def convert(f: FunDef, i: Int, x: Seq[ArithExpr], y: Seq[ArithExpr], S: Seq[Signature], R: Seq[Rule], Ss: Expr)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
+    val tlb = FunOrig(f.id, x++y) // todo f's args instead of xy
+    val trb = Eval(i, f, (x++y).map(e => ExprT(e)))
 
     println("new")
 
@@ -233,8 +254,8 @@ trait Printer {
     case ADT(id, tps, args) => ConsT(id, args.map(field => evalExp(field)).toList)
 
 
-  protected def convert1(f: FunDef, i: Int, x: Seq[(Identifier, Type)], y: Seq[(Identifier, Type)], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
-    val xy = x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))
+  protected def convert1(f: FunDef, i: Int, x: Seq[ArithExpr], y: Seq[ArithExpr], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
+    val xy = x++y//x.map(v => VarT(v._1, v._2)) ++ y.map(v => VarT(v._1, v._2))
     val xy_terms = xy.map(ExprT(_))
     //x.map((ctx.opts.symbols.get.sorts ++ ctx.opts.symbols.get.functions)(_))
     Ss match {
@@ -243,33 +264,33 @@ trait Printer {
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
-        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(BooleanType()), f.returnType), f))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(BooleanType()), f.returnType), f))
         (S1, R1, i+1)
       case IntegerLiteral(_) | Plus(_, _) | Minus(_, _) | Times(_, _) | Division(_, _) | Modulo(_, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
-        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(IntegerType()), f.returnType), f))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(IntegerType()), f.returnType), f))
         (S1, R1, i+1)
       case Variable(_, t, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
-        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(t), f.returnType), f))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
       case ADTSelector(adt, selector) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         // todo update Seq(UnitType())
-        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(UnitType()), f.returnType), f))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(UnitType()), f.returnType), f))
         (S1, R1, i+1)
       case ADT(id, _, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         // todo update Seq(UnitType())
-        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(UnitType()), f.returnType), f))
+        val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(UnitType()), f.returnType), f))
         (S1, R1, i+1)
 
       case Assume(pred, body) =>
@@ -303,7 +324,7 @@ trait Printer {
         val S2 = S ++ S1p
         val R2 = R ++ R1p
 
-        convert1(f, j, x, y ++ Seq((b.id, b.tpe)), S2, R2, e, pathc)
+        convert1(f, j, x, y ++ Seq(VarT(b.id, b.tpe)), S2, R2, e, pathc)
 
       case FunctionInvocation(g, tps, args) =>
         val retTpe = ctx.opts.symbols.get.functions(g).returnType
@@ -314,8 +335,8 @@ trait Printer {
           Rule(Eval(i+1, f, xy_terms ++ Seq(Ret(g, ExprT(ret)))), Eval(i+2, f, xy_terms ++ Seq(ExprT(ret))), pathc))
 
         val S2 = S ++ Seq(
-          FunDecl(i+1, FunType(xy.map(_._2) ++ Seq(retTpe), f.returnType), f),
-          FunDecl(i+2, FunType(xy.map(_._2) ++ Seq(retTpe), f.returnType), f))
+          FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(retTpe), f.returnType), f),
+          FunDecl(i+2, FunType(xy.map(typeOfExpression) ++ Seq(retTpe), f.returnType), f))
 
         (S2, R2, i+2)
 
@@ -343,8 +364,7 @@ trait Printer {
 
         val nnn = xy_terms_case.map(elem =>
           elem match
-            case ExprT(VarT(a, b)) => (a, b)
-            case ExprT(ConsT(id,fields)) => (id, UnitType())
+            case ExprT(e) => e
         )
 
         val j = i
@@ -393,8 +413,8 @@ trait Printer {
         })
 
         val Sp = S ++ Seq(
-                FunDecl(j+1, FunType(xy.map(_._2), f.returnType), f),
-                FunDecl(k, FunType(xy.map(_._2), f.returnType), f)) ++
+                FunDecl(j+1, FunType(xy.map(typeOfExpression), f.returnType), f),
+                FunDecl(k, FunType(xy.map(typeOfExpression), f.returnType), f)) ++
                 S2p ++ S3p
 
 
@@ -483,8 +503,8 @@ trait Printer {
 
 
         val Sp = S ++ Seq(
-                FunDecl(j+1, FunType(xy.map(_._2), f.returnType), f),
-                FunDecl(k, FunType(xy.map(_._2), f.returnType), f)) ++
+                FunDecl(j+1, FunType(xy.map(typeOfExpression), f.returnType), f),
+                FunDecl(k, FunType(xy.map(typeOfExpression), f.returnType), f)) ++
                 S2p ++ S3p
 
         val Rp = R ++
@@ -1243,7 +1263,7 @@ trait Printer {
         if(fd.id.name == "example") {
 
         //fd, 0 , f U (), (), (), ()
-        val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => (p.id, p.tpe)), Seq(), Seq(), fd.fullBody)
+        val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => VarT(p.id, p.tpe)), Seq(), Seq(), fd.fullBody)
 
         val ctrl = printCTRL((res._1, res._2))
 
