@@ -348,7 +348,7 @@ trait Printer {
         println(s.lookupConstructor(id).get.fields)
         val constructors = cons.get.getSort(using s).constructors
 
-
+        val fresh_fields = cons.get.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
         val search = evalExp(e)
 
         // in xy terms
@@ -356,7 +356,8 @@ trait Printer {
         // replace it with id(fields), which is of matched type
         val xy_terms_case = xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
-            ExprT(ConsT(id, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
+            ExprT(ConsT(id, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
+            //ExprT(ConsT(id, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         )
 
@@ -422,9 +423,11 @@ trait Printer {
 
 
         val xy_terms_case_not = constructors.filterNot(_ == cons.get).map(c =>
+          val fresh_fields = c.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
           xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
-            ExprT(ConsT(c.id, c.fields.map(field => VarT(field.id, field.tpe)).toList))
+            ExprT(ConsT(c.id, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
+            //ExprT(ConsT(c.id, c.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         ))
 
