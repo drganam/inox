@@ -1263,7 +1263,15 @@ trait Printer {
         if(fd.id.name == "example") {
 
         //fd, 0 , f U (), (), (), ()
-        val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => VarT(p.id, p.tpe)), Seq(), Seq(), fd.fullBody)
+        val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => p.tpe match
+          case ADTType(_, _) =>
+            println("debugdebugdebug")
+            println(ctx.opts.symbols.get)
+              //.fields.map(f => VarT(f.id, f.tpe)).toList)
+            VarT(p.id, p.tpe)
+          case _ =>
+            VarT(p.id, p.tpe)
+        ), Seq(), Seq(), fd.fullBody)
 
         val ctrl = printCTRL((res._1, res._2))
 
