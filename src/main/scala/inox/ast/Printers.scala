@@ -189,12 +189,10 @@ trait Printer {
 
 
   // conversion
-
+  // todo: x and y can be of Identifier type afterall?
   protected def convert(f: FunDef, i: Int, x: Seq[ArithExpr], y: Seq[ArithExpr], S: Seq[Signature], R: Seq[Rule], Ss: Expr)(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
     val tlb = FunOrig(f.id, x++y) // todo f's args instead of xy
     val trb = Eval(i, f, (x++y).map(e => ExprT(e)))
-
-    println("new")
 
     val SsTransformed = insertLets(shortCircuit(Ss))
     //println(SsTransformed)
@@ -250,7 +248,10 @@ trait Printer {
     case Division(l, r) => DivT(evalExp(l), evalExp(r))
     case Remainder(l, r) => ???
     case Modulo(l, r) => ModT(evalExp(l), evalExp(r))
-    case ADTSelector(adt, selector) => VarT(selector, UnitType())
+    case ADTSelector(Variable(adt, _, _), selector) =>
+      println("ADTSELECTOR") // keep a map to original selectors
+      println(e)
+      VarT(new Identifier(adt.uniqueName + selector.uniqueName, -1, 0), UnitType())
     case ADT(id, tps, args) => ConsT(id, args.map(field => evalExp(field)).toList)
 
 
@@ -348,7 +349,15 @@ trait Printer {
         println(s.lookupConstructor(id).get.fields)
         val constructors = cons.get.getSort(using s).constructors
 
-        val fresh_fields = cons.get.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
+
+        val freshid = e match {
+          case Variable(id, _, _ ) => id.uniqueName
+          case _ => ""
+        }
+
+        val fresh_fields = cons.get.fields.map(v =>
+          Variable(new Identifier(freshid + v.id.uniqueName, -1, 0), v.tpe, List()))
+
         val search = evalExp(e)
 
         // in xy terms
@@ -360,8 +369,6 @@ trait Printer {
             //ExprT(ConsT(id, cons.get.fields.map(field => VarT(field.id, field.tpe)).toList))
           case _ => elem
         )
-
-        println(xy_terms)
 
         val nnn = xy_terms_case.map(elem =>
           elem match
@@ -423,7 +430,7 @@ trait Printer {
 
 
         val xy_terms_case_not = constructors.filterNot(_ == cons.get).map(c =>
-          val fresh_fields = c.fields.map(v => Variable(new Identifier("v", 0, 0).freshen, v.tpe, List()))
+          val fresh_fields = c.fields.map(v => Variable(new Identifier(freshid + v.id.uniqueName, -1, 0), v.tpe, List()))
           xy_terms.map(elem => elem match
           case ExprT(s) if s == search =>
             ExprT(ConsT(c.id, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
@@ -663,7 +670,11 @@ trait Printer {
       i.toString
     case VarT(id: Identifier, t: Type) =>
       ctx.opts.symbols.get.lookupConstructor(id) match
-        case None => id.uniqueName
+        case None =>
+          println("VART IS NOT CONS ?")
+          println(id.uniqueName)
+          println(t)
+          id.uniqueName
         case Some(c) => id.uniqueName + "(" + c.fields.map(field => VarT(field.id, field.tpe)).map(printCTRL(_)).mkString(", ") + ")"
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " + " + printAPROVE(b)
@@ -698,11 +709,12 @@ trait Printer {
     case TrueT() =>
       "true"
     case ConsT(id: Identifier, v: List[ArithExpr]) =>
-      val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
-      val fields = f.map(field => VarT(field.id, field.tpe))
-      println("fields")
-      println(fields.map(printCTRL(_)).mkString(", "))
-      id.uniqueName + "(" + fields.map(printCTRL(_)).mkString(", ") + ")"
+      // val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
+      // val fields = f.map(field => VarT(field.id, field.tpe))
+      // println("fields")
+      // println(fields.map(printCTRL(_)).mkString(", "))
+      // id.uniqueName + "(" + fields.map(printCTRL(_)).mkString(", ") + ")"
+      id.uniqueName + "(" + v.map(printCTRL(_)).mkString(", ") + ")"
 
 
   protected def printCORA(ctrs: (Seq[Signature], Seq[Rule])): String =
@@ -1268,8 +1280,7 @@ trait Printer {
         //fd, 0 , f U (), (), (), ()
         val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => p.tpe match
           case ADTType(_, _) =>
-            println("debugdebugdebug")
-            println(ctx.opts.symbols.get)
+            //println(ctx.opts.symbols.get)
               //.fields.map(f => VarT(f.id, f.tpe)).toList)
             VarT(p.id, p.tpe)
           case _ =>
