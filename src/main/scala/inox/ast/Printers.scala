@@ -848,7 +848,7 @@ trait Printer {
         t
 
   // lets for fun. call args etc.
-
+  // todo refactor
   protected def insertLets(t: Expr)(using ctx: PrinterContext): Expr = t match
     case And(Seq(a: Expr, b: Expr)) =>
       val freshA = Variable(new Identifier("tmp", 0, 0).freshen, BooleanType(), List())
@@ -860,11 +860,14 @@ trait Printer {
       Let(freshA.toVal, insertLets(a), Let(freshB.toVal, insertLets(b), Or(Seq(freshA, freshB))))
     case Let(b, d, e) =>
       Let(b, insertLets(d), insertLets(e))
-    case IfExpr(e @ IfExpr(_, _, _), ss, tt) =>
+    case IfExpr(v @ Variable(_, _, _), ss, tt) =>
+      IfExpr(v, insertLets(ss), insertLets(tt))
+    case IfExpr(IsConstructor(e, id), ss, tt) =>
+      IfExpr(IsConstructor(insertLets(e), id), insertLets(ss), insertLets(tt))
+    case IfExpr(e, ss, tt) =>
       val fresh = Variable(new Identifier("tmp", 0, 0).freshen, e.getType(using ctx.opts.symbols.get), List())
       Let(fresh.toVal, insertLets(e), IfExpr(fresh, insertLets(ss), insertLets(tt)))
-    case IfExpr(e, ss, tt) =>
-      IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
+      // IfExpr(insertLets(e), insertLets(ss), insertLets(tt))
     case FunctionInvocation(g, tps, args) =>
       def chain(l: Seq[Expr], freshs: List[Variable]): Expr = l match
         case(Variable(id, t, l) :: Nil) => FunctionInvocation(g, tps, freshs++List(Variable(id, t, l)))
@@ -877,7 +880,6 @@ trait Printer {
           Let(freshA.toVal, insertLets(x), chain(xs, freshs++List(freshA)))
       if (args.isEmpty) FunctionInvocation(g, tps, args)
       else chain(args, List())
-    // todo refactor
     case BooleanLiteral(_) => t
     case IntegerLiteral(_) => t
     case Variable(_, _, _) => t
