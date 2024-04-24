@@ -638,22 +638,32 @@ trait Printer {
       case f => " :|: " + printAPROVE(f)
     printAPROVE(r.tl) + " -> " + printAPROVE(r.tr) + cString
 
-  // TODO finish
+  // TODO finish -- prints vars from all the rules
   protected def printAPROVE(r: Seq[Rule])(using ctx: PrinterContext): List[String] =
     val t = r.map(e => List(e.tr, e.tl)).flatten
-    t.toList.map(ter => ter match
+    t.toList.flatMap(ter => ter match
       case Ret(id, ret) =>
         List() //"ret_" + id.name + "(" + printAPROVE(ret) + ")"
       case Eval(id, fd, t) =>
-        t.map(e => e match
-          case ExprT(VarT(id, _)) => Some(id)
-          case _ => None
-        ).toList.flatten.map(_.uniqueName)
+        t.flatMap(e => e match
+          case ExprT(VarT(id, _)) =>
+            ctx.opts.symbols.get.lookupConstructor(id) match
+            case None =>
+              List(id)
+            case Some(c) =>
+              List(id) ++ c.fields.map(field => field.id)
+          case ExprT(ConsT(id, v)) =>
+            v.flatMap(f => f match
+              case VarT(id, _) => Some(id)
+              case _ => None
+            )
+          case _ => List()
+        ).toList.map(_.uniqueName)
       case FunOrig(id: Identifier, arith_expr: Seq[ArithExpr]) =>
         List() //id.uniqueName + "(" + arith_expr.map(printAPROVE(_)).mkString(", ") + ")"
       case ExprT(arith_expr) =>
         List() //printAPROVE(arith_expr)
-    ).flatten
+    )
 
   protected def printAPROVE(t: Term)(using ctx: PrinterContext): String = t match
     case Ret(id, ret) =>
@@ -671,11 +681,9 @@ trait Printer {
     case VarT(id: Identifier, t: Type) =>
       ctx.opts.symbols.get.lookupConstructor(id) match
         case None =>
-          println("VART IS NOT CONS ?")
-          println(id.uniqueName)
-          println(t)
           id.uniqueName
-        case Some(c) => id.uniqueName + "(" + c.fields.map(field => VarT(field.id, field.tpe)).map(printCTRL(_)).mkString(", ") + ")"
+        case Some(c) =>
+          id.uniqueName + "(" + c.fields.map(field => VarT(field.id, field.tpe)).map(printCTRL(_)).mkString(", ") + ")"
     case AddT(a: ArithExpr, b: ArithExpr) =>
       printAPROVE(a) + " + " + printAPROVE(b)
     case SubT(a: ArithExpr, b: ArithExpr) =>
