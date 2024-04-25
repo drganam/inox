@@ -279,8 +279,30 @@ trait Printer {
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(t), f.returnType), f))
         (S1, R1, i+1)
-      case ADTSelector(adt, selector) =>
-        val tl = Eval(i, f, xy_terms)
+      case s @ ADTSelector(adt, selector) =>
+        val cons = s.constructor(using ctx.opts.symbols.get)
+        val fields = cons.fields
+
+        val freshid = adt match {
+          case Variable(id, _, _ ) => id.uniqueName
+          case _ => ""
+        }
+
+        val fresh_fields = fields.map(v =>
+          Variable(new Identifier(freshid + v.id.uniqueName, -1, 0), v.tpe, List()))
+
+        val search = evalExp(adt)
+
+        // in xy terms
+        // find adt, which is of var type
+        // replace it with cons(fields)
+        val xy_terms_adt = xy_terms.map(elem => elem match
+          case ExprT(s) if s == search =>
+            ExprT(ConsT(cons.id, fresh_fields.map(fresh => VarT(fresh.id, fresh.tpe)).toList))
+          case _ => elem
+        )
+
+        val tl = Eval(i, f, xy_terms_adt)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         // todo update Seq(UnitType())
