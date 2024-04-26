@@ -1096,9 +1096,6 @@ trait Printer {
     case Tuple(exprs) => p"($exprs)"
     case TupleSelect(t, i) => p"$t._$i"
     case IsConstructor(e, id) =>
-      println("IsConstructor")
-      println(e)
-      println(id)
       p"$e is $id"
     case ADTSelector(e, id) => p"$e.$id"
 
@@ -1307,7 +1304,7 @@ trait Printer {
 
     case fd: FunDef =>
       println("fundef")
-        if(fd.id.name == "example") {
+        //if(fd.id.name == "example") {
 
         //fd, 0 , f U (), (), (), ()
         val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => p.tpe match
@@ -1338,7 +1335,7 @@ trait Printer {
         fw_aprove.flush()
         fw_aprove.close()
 
-      }
+      //}
 
       for (an <- fd.flags) {
         p"""|@${an.asString(using ctx.opts)}
