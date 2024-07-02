@@ -252,7 +252,12 @@ trait Printer {
       println("ADTSELECTOR") // keep a map to original selectors
       println(e)
       VarT(new Identifier(adt.uniqueName + selector.uniqueName, -1, 0), UnitType())
+    // TODO nested selector a.b.c
+    //case ADTSelector(ADTSelector(Variable(adt, _, _), selector1), selector2) =>
+    //  println("nested selections")
+    //  VarT(new Identifier(adt.uniqueName + selector1.uniqueName + selector2.uniqueName, -1, 0), UnitType())
     case ADT(id, tps, args) => ConsT(id, args.map(field => evalExp(field)).toList)
+    case BVLiteral(s, v, n) => IntValueT(BVLiteral(s, v, n).toBigInt) // todo
 
 
   protected def convert1(f: FunDef, i: Int, x: Seq[ArithExpr], y: Seq[ArithExpr], S: Seq[Signature], R: Seq[Rule], Ss: Tree, pathc: ArithExpr = TrueT())(using ctx: PrinterContext): (Seq[Signature], Seq[Rule], Int) = {
@@ -316,6 +321,12 @@ trait Printer {
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(UnitType()), f.returnType), f))
         (S1, R1, i+1)
 
+
+      // useless info ?
+      case Assume(IsConstructor(_, _), body) =>
+        println("assume")
+        convert1(f, i, x, y, S, R, body, pathc)
+
       case Assume(pred, body) =>
         println("assume")
         println(pred)
@@ -368,7 +379,6 @@ trait Printer {
 
         val s = ctx.opts.symbols.get
         val cons = s.lookupConstructor(id)
-        println(s.lookupConstructor(id).get.fields)
         val constructors = cons.get.getSort(using s).constructors
 
 
@@ -469,9 +479,6 @@ trait Printer {
       case IfExpr(e, ss, tt) =>
         val j = i
         val condition = evalExp(e)
-        println("here")
-        println(pathc)
-        println(pathc == TrueT())
 
         // convert then branch:
         val res2 = convert1(f, j+1, x++y, Seq(), Seq(), Seq(), ss, if (pathc == TrueT()) condition else AndT(condition, pathc))
@@ -564,7 +571,7 @@ trait Printer {
 
   protected def printCTRL(ctrs: (Seq[Signature], Seq[Rule]))(using ctx: PrinterContext): String =
     "THEORY ints     ;\nLOGIC QF_LIA    ;\nSOLVER internal ;\n"+
-    "SIGNATURE " + ctrs._1.map(printCTRL(_)).mkString(" ;\n") + " ;\n" +
+    "SIGNATURE\n" + ctrs._1.map(printCTRL(_)).mkString(" ;\n") + " ;\n" +
     "RULES\n" + ctrs._2.map(printCTRL(_)).mkString("\n") +
     "\nQUERY termination"
 
@@ -641,8 +648,6 @@ trait Printer {
     case ConsT(id: Identifier, v: List[ArithExpr]) =>
       val f = ctx.opts.symbols.get.lookupConstructor(id).get.fields
       val fields = f.map(field => VarT(field.id, field.tpe))
-      println("fields")
-      println(fields.map(printCTRL(_)).mkString(", "))
       id.uniqueName + "(" + fields.map(printCTRL(_)).mkString(", ") + ")"
 
   protected def printCTRL(t: Type): String = t match
@@ -836,12 +841,18 @@ trait Printer {
     // if (a) true else b
 
   protected def shortCircuit(t: Expr): Expr =
-    println("ShortCircuit")
-    println(t)
-    println("done")
     t match
-      case And(Seq(a: Expr, b: Expr)) =>
+      case And(Seq(a: Expr, b: Expr)) => // TODO special case, check the next and remove this if ok
         IfExpr(shortCircuit(a), shortCircuit(b), BooleanLiteral(false))
+      case And(l) =>
+        def chain(l: List[Expr]): Expr = l match
+          case x::Nil =>
+            shortCircuit(x)
+          case x::xs =>
+            IfExpr(shortCircuit(x), chain(xs), BooleanLiteral(false))
+          case Nil =>
+            t
+        chain(l.toList)
       case Or(Seq(a: Expr, b: Expr)) =>
         IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
       case Let(b, d, e) =>
@@ -1015,8 +1026,10 @@ trait Printer {
     case IsConstructor(e, id) => IsConstructor(insertLets(e), id)
     case _ => t
 
-  // existing INOX printing
 
+  var aprove: (Seq[Signature], Seq[Rule]) = (List(), List())
+  var ctrl: (Seq[Signature], Seq[Rule]) = (List(), List())
+  // existing INOX printing
   protected def ppBody(tree: Tree)(using ctx: PrinterContext): Unit = {
   //println("ppBody")
   tree match {
@@ -1304,7 +1317,9 @@ trait Printer {
 
     case fd: FunDef =>
       println("fundef")
-        //if(fd.id.name == "example") {
+      println(fd.id.uniqueName)
+      println(fd.flags)
+      // if(fd.id.name == "example") {
 
         //fd, 0 , f U (), (), (), ()
         val res = convert(fd, 0, Seq() ++ Seq(), fd.params.map(p => p.tpe match
@@ -1316,26 +1331,32 @@ trait Printer {
             VarT(p.id, p.tpe)
         ), Seq(), Seq(), fd.fullBody)
 
-        val ctrl = printCTRL((res._1, res._2))
+        //val aprove = printAPROVE((res._1, res._2))
+        //val ctrl = printCTRL((res._1, res._2))
 
-        val aprove = printAPROVE((res._1, res._2))
+        aprove = (aprove._1 ++ res._1, aprove._2 ++ res._2)
+        ctrl = (ctrl._1 ++ res._1, ctrl._2 ++ res._2)
 
-        println("CTRL export:")
-        println(ctrl)
-        println("APROVE export:")
-        println(aprove)
+        val aproveMerge = printAPROVE(aprove)
+        val ctrlMerge = printCTRL(ctrl)
 
-        val fw = new java.io.FileWriter("example.ctrs");
-        fw.write(ctrl)
+
+        //println("CTRL export:")
+        //println(ctrlMerge)
+        //println("APROVE export:")
+        //println(aproveMerge)
+
+        val fw = new java.io.FileWriter("ctrl/example.ctrs");
+        fw.write(ctrlMerge)
         fw.flush()
         fw.close()
 
-        val fw_aprove = new java.io.FileWriter("example.itrs");
-        fw_aprove.write(aprove)
+        val fw_aprove = new java.io.FileWriter("aprove/example.itrs");
+        fw_aprove.write(aproveMerge)
         fw_aprove.flush()
         fw_aprove.close()
 
-      //}
+      // }
 
       for (an <- fd.flags) {
         p"""|@${an.asString(using ctx.opts)}
