@@ -313,6 +313,7 @@ trait Printer {
         // todo update Seq(UnitType())
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(UnitType()), f.returnType), f))
         (S1, R1, i+1)
+
       case ADT(id, _, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
@@ -320,7 +321,6 @@ trait Printer {
         // todo update Seq(UnitType())
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(UnitType()), f.returnType), f))
         (S1, R1, i+1)
-
 
       // useless info ?
       case Assume(IsConstructor(_, _), body) =>
@@ -855,6 +855,15 @@ trait Printer {
         chain(l.toList)
       case Or(Seq(a: Expr, b: Expr)) =>
         IfExpr(shortCircuit(a), BooleanLiteral(true), shortCircuit(b))
+      case Or(l) =>
+        def chain(l: List[Expr]): Expr = l match
+          case x::Nil =>
+            shortCircuit(x)
+          case x::xs =>
+            IfExpr(shortCircuit(x), BooleanLiteral(true), chain(xs))
+          case Nil =>
+            t
+        chain(l.toList)
       case Let(b, d, e) =>
         Let(b, shortCircuit(d), shortCircuit(e))
       case IfExpr(e, ss, tt) =>
