@@ -195,7 +195,7 @@ trait Printer {
     val trb = Eval(i, f, (x++y).map(e => ExprT(e)))
 
     val SsTransformed = insertLets(shortCircuit(Ss))
-    //println(SsTransformed)
+    println(SsTransformed)
     //val res = convert1(f, i, x, y, S, R, Ss)
     val res = convert1(f, i, x, y, S, R, SsTransformed)
 
@@ -228,10 +228,14 @@ trait Printer {
   }
 
 
+// TODO consider replacing all int types wih IntegerLiteral
+
   protected def evalExp(e: Tree)(using ctx: PrinterContext): ArithExpr = e match
     case BooleanLiteral(true) => TrueT()
     case BooleanLiteral(false) => FalseT()
     case IntegerLiteral(v) => IntValueT(v)
+    case Int64Literal(v) => IntValueT(v)
+    case Int32Literal(v) => IntValueT(v)
     case Variable(id, t, _) => VarT(id, t)
     case FunctionInvocation(g, tps, args) => CallT(g, args.map(evalExp(_)))
     case And(List(a: Tree, b: Tree)) => AndT(evalExp(a), evalExp(b))
@@ -272,7 +276,7 @@ trait Printer {
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
         val S1 = S ++ Seq(FunDecl(i+1, FunType(xy.map(typeOfExpression) ++ Seq(BooleanType()), f.returnType), f))
         (S1, R1, i+1)
-      case IntegerLiteral(_) | Plus(_, _) | Minus(_, _) | Times(_, _) | Division(_, _) | Modulo(_, _) =>
+      case IntegerLiteral(_) | Int32Literal(_) | Int64Literal(_) | Plus(_, _) | Minus(_, _) | Times(_, _) | Division(_, _) | Modulo(_, _) =>
         val tl = Eval(i, f, xy_terms)
         val tr = Eval(i+1, f, xy_terms ++ Seq(ExprT(evalExp(Ss))))
         val R1 = R ++ Seq(Rule(tl, tr, pathc))
@@ -872,6 +876,8 @@ trait Printer {
         FunctionInvocation(g, tps, args.map(shortCircuit(_)))
       case BooleanLiteral(_) => t
       case IntegerLiteral(_) => t
+      case Int64Literal(_) => t
+      case Int32Literal(_) => t
       case Variable(_, _, _) => t
       case LessThan(a, b) => LessThan(shortCircuit(a), shortCircuit(b))
       case GreaterThan(l, r) => GreaterThan(shortCircuit(l), shortCircuit(r))
@@ -932,7 +938,10 @@ trait Printer {
       else chain(args, List())
     case BooleanLiteral(_) => t
     case IntegerLiteral(_) => t
+    case Int32Literal(_) => t
+    case Int64Literal(_) => t
     case Variable(_, _, _) => t
+    // TODO combinations with Int64Literal ?
     case LessThan(a: Variable, b: Variable) => t
     case LessThan(a: IntegerLiteral, b: IntegerLiteral) => t
     case LessThan(a: IntegerLiteral, b: Variable) => t
@@ -957,6 +966,8 @@ trait Printer {
     case Equals(a: Variable, b: IntegerLiteral) => t
     case Equals(a: BooleanLiteral, b: Variable) => t
     case Equals(a: Variable, b: BooleanLiteral) => t
+    case Equals(a: Variable, Int32Literal(_)) => t
+    case Equals(Int32Literal(_), b: Variable) => t
     case Not(a: Variable) => t
     case Not(a: BooleanLiteral) => t
     case Plus(a: Variable, b: Variable) => t
